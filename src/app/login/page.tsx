@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { loginUser } from "@/services/auth";
 import { useAuth } from "@/context/AuthContext";
+import toast from "react-hot-toast";
 import styles from "./login.module.css";
 
 export default function LoginPage() {
@@ -66,13 +67,16 @@ export default function LoginPage() {
 
       login({ user: result.user, token: result.access_token });
 
+      toast.success("¡Bienvenido!");
       if (result.user?.rol === "ADMIN") {
         router.push("/admin");
       } else {
         router.push("/perfil");
       }
-    } catch {
-      alert("Credenciales incorrectas.");
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : "No se pudo iniciar sesión. Verificá tus datos.";
+      toast.error(message);
     } finally {
       setLoading(false);
     }

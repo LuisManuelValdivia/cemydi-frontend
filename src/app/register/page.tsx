@@ -5,7 +5,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { registerUser } from "@/services/auth";
-import { ToastViewport, type ToastItem } from "@/components/feedback";
+import toast from "react-hot-toast";
 import styles from "./register.module.css";
 
 export default function RegisterPage() {
@@ -26,22 +26,6 @@ export default function RegisterPage() {
   });
 
   const [loading, setLoading] = useState(false);
-  const [toasts, setToasts] = useState<ToastItem[]>([]);
-
-  const pushToast = (type: ToastItem["type"], text: string) => {
-    setToasts((prev) => [
-      ...prev,
-      {
-        id: Date.now() + Math.floor(Math.random() * 10000),
-        type,
-        text,
-      },
-    ]);
-  };
-
-  const dismissToast = (id: number) => {
-    setToasts((prev) => prev.filter((item) => item.id !== id));
-  };
 
   const validate = (name: string, value: string) => {
     let error = "";
@@ -106,12 +90,12 @@ export default function RegisterPage() {
         correo: form.correo,
         password: form.password,
       });
-      pushToast("success", "Cuenta creada correctamente. Redirigiendo al login...");
+      toast.success("Cuenta creada correctamente. Redirigiendo al login...");
       await new Promise((resolve) => setTimeout(resolve, 900));
       router.push("/login");
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "No se pudo registrar la cuenta.";
-      pushToast("error", message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -119,7 +103,6 @@ export default function RegisterPage() {
 
   return (
     <section className={styles.authShell}>
-      <ToastViewport toasts={toasts} onDismiss={dismissToast} />
       <div className={styles.container}>
         <div className={styles.left}>
           <div className={styles.overlay} />
