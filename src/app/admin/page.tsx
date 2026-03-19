@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import toast from "react-hot-toast";
 import {
   AdminReview,
   AdminPromotion,
@@ -2233,6 +2234,7 @@ export default function AdminDashboardPage() {
           type="button"
           onClick={() => {
             logout();
+            toast.success("Sesión cerrada correctamente");
             router.push("/login");
           }}
         >

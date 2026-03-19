@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { updateMyProfile } from "@/services/users";
 import { ToastViewport, type ToastItem } from "@/components/feedback";
+import toast from "react-hot-toast";
 import styles from "./perfil.module.css";
 
 type ProfileForm = {
@@ -137,6 +138,7 @@ export default function PerfilPage() {
 
   const handleLogout = () => {
     logout();
+    toast.success("Sesión cerrada correctamente");
     router.push("/login");
   };
 
