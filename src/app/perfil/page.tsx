@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { logoutUser } from "@/services/auth";
 import { updateMyProfile } from "@/services/users";
 import { ToastViewport, type ToastItem } from "@/components/feedback";
 import toast from "react-hot-toast";
@@ -136,10 +137,20 @@ export default function PerfilPage() {
     }
   };
 
-  const handleLogout = () => {
-    logout();
-    toast.success("Sesión cerrada correctamente");
-    router.push("/login");
+  const handleLogout = async () => {
+    const token = localStorage.getItem("token");
+
+    try {
+      if (token) {
+        await logoutUser(token);
+      }
+    } catch {
+      // Si la sesion ya expiro, igual limpiamos el estado local.
+    } finally {
+      logout();
+      toast.success("Sesión cerrada correctamente");
+      router.push("/login");
+    }
   };
 
   if (loading) return <p className={styles.noAuth}>Cargando perfil...</p>;

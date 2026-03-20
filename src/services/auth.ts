@@ -42,3 +42,20 @@ export async function loginUser(data: {
 
   return result;
 }
+
+export async function logoutUser(token: string) {
+  const res = await fetch(`${API_URL}/auth/logout`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const result = await res.json().catch(() => ({ message: "Sesion cerrada correctamente" }));
+
+  if (!res.ok) {
+    throw new Error(result.message || "No se pudo cerrar sesion");
+  }
+
+  return result;
+}

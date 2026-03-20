@@ -129,6 +129,7 @@ export type DatabaseStatus = {
   backup: {
     format: string;
     fileExtension: string;
+    provider?: string;
   };
 };
 
@@ -137,6 +138,48 @@ export type DatabaseBackupRecord = {
   fileName: string;
   sizeBytes: number;
   createdAt: string;
+};
+
+export type DatabaseBackupSchedule = {
+  enabled: boolean;
+  everyDays: number;
+  runAtTime: string;
+  retentionDays: number;
+  lastRunAt: string | null;
+  nextRunAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ActiveUserSession = {
+  sessionId: string;
+  userId: number;
+  nombre: string;
+  correo: string;
+  rol: UserRole;
+  createdAt: string;
+  lastSeenAt: string;
+  expiresAt: string;
+};
+
+export type LoginAuditEntry = {
+  id: number;
+  userId: number | null;
+  nombre: string;
+  correo: string;
+  success: boolean;
+  reason: string | null;
+  attemptedAt: string;
+};
+
+export type AuthSecurityOverview = {
+  activeSessions: ActiveUserSession[];
+  loginAttempts: LoginAuditEntry[];
+  summary: {
+    activeSessions: number;
+    recentAttempts: number;
+    failedAttempts: number;
+  };
 };
 
 export type CreateUserPayload = {
@@ -177,6 +220,8 @@ export type CreateSupplierPayload = {
   repartidor: string;
   direccion: string;
 };
+
+export type UpdateSupplierPayload = CreateSupplierPayload;
 
 export type CreatePromotionPayload = {
   mode: PromotionMode;
@@ -339,6 +384,27 @@ export function createBrand(token: string, payload: CreateCatalogOptionPayload) 
   );
 }
 
+export function updateBrand(
+  token: string,
+  id: number,
+  payload: CreateCatalogOptionPayload
+) {
+  return request<{ brand: BrandOption; message: string }>(
+    `/catalogs/brands/${id}`,
+    token,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export function deleteBrand(token: string, id: number) {
+  return request<{ message: string }>(`/catalogs/brands/${id}`, token, {
+    method: "DELETE",
+  });
+}
+
 export function createClassification(
   token: string,
   payload: CreateCatalogOptionPayload
@@ -351,6 +417,27 @@ export function createClassification(
       body: JSON.stringify(payload),
     }
   );
+}
+
+export function updateClassification(
+  token: string,
+  id: number,
+  payload: CreateCatalogOptionPayload
+) {
+  return request<{ classification: ClassificationOption; message: string }>(
+    `/catalogs/classifications/${id}`,
+    token,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export function deleteClassification(token: string, id: number) {
+  return request<{ message: string }>(`/catalogs/classifications/${id}`, token, {
+    method: "DELETE",
+  });
 }
 
 export function listSuppliers(token: string) {
@@ -555,5 +642,69 @@ export async function downloadDatabaseBackupById(token: string, id: number) {
 export function getDatabaseStatus(token: string) {
   return request<{ status: DatabaseStatus }>("/backups/database/status", token, {
     method: "GET",
+  });
+}
+
+export function getAuthSecurityOverview(token: string) {
+  return request<{ overview: AuthSecurityOverview }>("/auth/security-overview", token, {
+    method: "GET",
+  });
+}
+
+export function getDatabaseBackupSchedule(token: string) {
+  return request<{ schedule: DatabaseBackupSchedule }>(
+    "/backups/database/schedule",
+    token,
+    {
+      method: "GET",
+    }
+  );
+}
+
+export function deleteDatabaseBackupSchedule(token: string) {
+  return request<{
+    schedule: DatabaseBackupSchedule;
+    message: string;
+  }>("/backups/database/schedule", token, {
+    method: "DELETE",
+  });
+}
+
+export function updateSupplier(
+  token: string,
+  id: number,
+  payload: UpdateSupplierPayload
+) {
+  return request<{ supplier: SupplierOption; message: string }>(
+    `/suppliers/${id}`,
+    token,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export function deleteSupplier(token: string, id: number) {
+  return request<{ message: string }>(`/suppliers/${id}`, token, {
+    method: "DELETE",
+  });
+}
+
+export function updateDatabaseBackupSchedule(
+  token: string,
+  payload: {
+    enabled: boolean;
+    everyDays: number;
+    runAtTime: string;
+    retentionDays: number;
+  }
+) {
+  return request<{
+    schedule: DatabaseBackupSchedule;
+    message: string;
+  }>("/backups/database/schedule", token, {
+    method: "PUT",
+    body: JSON.stringify(payload),
   });
 }

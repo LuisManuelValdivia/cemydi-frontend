@@ -1,6 +1,12 @@
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
-export async function registerUser(data: any) {
+type RegisterUserPayload = {
+  nombre: string;
+  correo: string;
+  password: string;
+};
+
+export async function registerUser(data: RegisterUserPayload) {
   const res = await fetch(`${API_URL}/auth/register`, {
     method: "POST",
     headers: {
@@ -9,5 +15,11 @@ export async function registerUser(data: any) {
     body: JSON.stringify(data),
   });
 
-  return res.json();
-} 
+  const result = await res.json();
+
+  if (!res.ok) {
+    throw new Error(result.message || "Error al registrar");
+  }
+
+  return result;
+}
