@@ -1,6 +1,6 @@
 "use client";
 
-import { CSSProperties, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CatalogProduct, getCatalogProducts } from "@/services/catalog";
@@ -65,7 +65,6 @@ function normalizePage(raw: string | null) {
 function CatalogoPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const layoutRef = useRef<HTMLDivElement | null>(null);
 
   const searchQuery = searchParams.get("q") ?? "";
   const appliedClassifications = useMemo(() => {
@@ -99,7 +98,6 @@ function CatalogoPageContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notifyRequested, setNotifyRequested] = useState<number[]>([]);
-  const [scrollViewportHeight, setScrollViewportHeight] = useState<number | null>(null);
 
   const requestRestockNotification = (productId: number) => {
     setNotifyRequested((prev) =>
@@ -153,39 +151,6 @@ function CatalogoPageContent() {
 
     void fetchCatalog();
   }, [searchQuery, appliedClassifications, appliedTipos, appliedReceta, appliedPage]);
-
-  useEffect(() => {
-    const updateScrollViewportHeight = () => {
-      if (window.innerWidth <= 1180) {
-        setScrollViewportHeight(null);
-        return;
-      }
-
-      const layoutNode = layoutRef.current;
-      if (!layoutNode) return;
-
-      const rect = layoutNode.getBoundingClientRect();
-      const availableHeight = Math.floor(window.innerHeight - rect.top - 16);
-      setScrollViewportHeight(Math.max(320, availableHeight));
-    };
-
-    updateScrollViewportHeight();
-    window.addEventListener("resize", updateScrollViewportHeight);
-    window.addEventListener("scroll", updateScrollViewportHeight, { passive: true });
-
-    return () => {
-      window.removeEventListener("resize", updateScrollViewportHeight);
-      window.removeEventListener("scroll", updateScrollViewportHeight);
-    };
-  }, []);
-
-  const layoutStyle = useMemo<CSSProperties | undefined>(() => {
-    if (!scrollViewportHeight) return undefined;
-
-    return {
-      ["--catalog-scroll-height" as string]: `${scrollViewportHeight}px`,
-    };
-  }, [scrollViewportHeight]);
 
   const currentPage = Math.min(appliedPage, totalPages);
 
@@ -255,7 +220,7 @@ function CatalogoPageContent() {
 
   return (
     <div className={styles.page}>
-      <div className={styles.layout} ref={layoutRef} style={layoutStyle}>
+      <div className={styles.layout}>
         <aside className={styles.filtersCard}>
           <h2>Filtros</h2>
 

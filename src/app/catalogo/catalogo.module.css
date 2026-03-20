@@ -9,12 +9,9 @@
   margin: 0 auto;
   display: grid;
   grid-template-columns: 300px 1fr;
-  grid-template-rows: minmax(0, 1fr);
+  align-items: start;
   gap: 20px;
-  height: var(--catalog-scroll-height, auto);
-  min-height: 0;
   width: 100%;
-  overflow: hidden;
 }
 
 .filtersCard {
@@ -22,10 +19,8 @@
   border: 1px solid #dbe4e6;
   border-radius: 22px;
   padding: 22px;
-  height: 100%;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  position: sticky;
+  top: 24px;
 }
 
 .filtersCard h2 {
@@ -79,11 +74,6 @@
 .catalogSection {
   display: grid;
   gap: 16px;
-  height: 100%;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding-right: 4px;
 }
 
 .catalogHeader {
@@ -306,21 +296,14 @@
 
   .layout {
     grid-template-columns: 1fr;
-    grid-template-rows: auto;
-    height: auto;
-    min-height: 0;
-    overflow: visible;
   }
 
   .filtersCard {
-    height: auto;
-    overflow: visible;
+    position: static;
   }
 
   .catalogSection {
-    height: auto;
-    overflow: visible;
-    padding-right: 0;
+    min-width: 0;
   }
 
   .grid {
