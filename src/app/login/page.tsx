@@ -2,6 +2,7 @@
 
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { loginUser } from "@/services/auth";
@@ -40,13 +41,13 @@ export default function LoginPage() {
       }
     }
 
-    setErrors(prev => ({ ...prev, [name]: error }));
+    setErrors((prev) => ({ ...prev, [name]: error }));
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
 
-    setForm(prev => ({
+    setForm((prev) => ({
       ...prev,
       [name]: value,
     }));
@@ -57,7 +58,7 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const hasErrors = Object.values(errors).some(err => err !== "");
+    const hasErrors = Object.values(errors).some((err) => err !== "");
     if (hasErrors) return;
 
     try {
@@ -75,7 +76,7 @@ export default function LoginPage() {
       }
     } catch (err: unknown) {
       const message =
-        err instanceof Error ? err.message : "No se pudo iniciar sesión. Verificá tus datos.";
+        err instanceof Error ? err.message : "No se pudo iniciar sesión. Verifica tus datos.";
       toast.error(message);
     } finally {
       setLoading(false);
@@ -96,7 +97,7 @@ export default function LoginPage() {
 
         <div className={styles.right}>
           <div className={styles.card}>
-            <h2>Iniciar Sesión</h2>
+            <h2>Iniciar sesión</h2>
 
             <form onSubmit={handleSubmit} noValidate>
               <label>Correo electrónico</label>
@@ -118,6 +119,10 @@ export default function LoginPage() {
                 className={errors.password ? styles.inputError : ""}
               />
               {errors.password && <span className={styles.errorText}>{errors.password}</span>}
+
+              <Link href="/forgot-password" className={styles.forgotLink}>
+                ¿Olvidaste tu contraseña?
+              </Link>
 
               <button type="submit" disabled={loading}>
                 {loading ? "Entrando..." : "Entrar a mi cuenta"}

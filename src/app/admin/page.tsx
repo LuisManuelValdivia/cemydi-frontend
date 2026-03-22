@@ -2994,17 +2994,14 @@ export default function AdminDashboardPage() {
       setBackupRecords((prev) => [result.backup, ...prev]);
       setBackupPage(1);
       void loadDatabaseStats();
-      setNotice({
-        type: "success",
-        text: `Respaldo generado: ${result.backup.fileName}`,
-      });
+      toast.success(`Respaldo creado: ${result.backup.fileName}`);
     } catch (error) {
       const message =
         error instanceof Error
           ? error.message
           : "No se pudo generar el respaldo de base de datos";
       if (!handleSessionError(message)) {
-        setNotice({ type: "error", text: message });
+        toast.error(message);
       }
     } finally {
       setGeneratingBackup(false);
@@ -3015,7 +3012,7 @@ export default function AdminDashboardPage() {
     if (!user) return;
 
     if (!selectedBackupTable) {
-      setNotice({ type: "error", text: "Selecciona una tabla para generar el respaldo." });
+      toast.error("Selecciona una tabla para generar el respaldo.");
       return;
     }
 
@@ -3025,17 +3022,14 @@ export default function AdminDashboardPage() {
       setBackupRecords((prev) => [result.backup, ...prev]);
       setBackupPage(1);
       void loadDatabaseStats();
-      setNotice({
-        type: "success",
-        text: `Respaldo de tabla generado: ${result.backup.fileName}`,
-      });
+      toast.success(`Respaldo de tabla creado: ${result.backup.fileName}`);
     } catch (error) {
       const message =
         error instanceof Error
           ? error.message
           : "No se pudo generar el respaldo de la tabla seleccionada";
       if (!handleSessionError(message)) {
-        setNotice({ type: "error", text: message });
+        toast.error(message);
       }
     } finally {
       setGeneratingTableBackup(false);
