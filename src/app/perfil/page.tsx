@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { logoutUser } from "@/services/auth";
 import { updateMyProfile } from "@/services/users";
-import { ToastViewport, type ToastItem } from "@/components/feedback";
 import toast from "react-hot-toast";
 import styles from "./perfil.module.css";
 
@@ -37,22 +36,6 @@ export default function PerfilPage() {
   });
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [toasts, setToasts] = useState<ToastItem[]>([]);
-
-  const pushToast = (type: ToastItem["type"], text: string) => {
-    setToasts((prev) => [
-      ...prev,
-      {
-        id: Date.now() + Math.floor(Math.random() * 10000),
-        type,
-        text,
-      },
-    ]);
-  };
-
-  const dismissToast = (id: number) => {
-    setToasts((prev) => prev.filter((item) => item.id !== id));
-  };
 
   useEffect(() => {
     if (!user) return;
@@ -96,12 +79,12 @@ export default function PerfilPage() {
     const correo = form.correo.trim();
 
     if (!nombre) {
-      pushToast("error", "El nombre es obligatorio.");
+      toast.error("El nombre es obligatorio.");
       return;
     }
 
     if (!correo || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) {
-      pushToast("error", "Ingresa un correo valido.");
+      toast.error("Ingresa un correo valido.");
       return;
     }
 
@@ -117,12 +100,12 @@ export default function PerfilPage() {
 
       updateUser(result.user);
       setForm(toForm(result.user as Record<string, unknown>));
-      pushToast("success", "Perfil actualizado correctamente.");
+      toast.success("Perfil actualizado correctamente.");
       setIsEditing(false);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "No se pudo actualizar el perfil.";
-      pushToast("error", message);
+      toast.error(message);
     } finally {
       setIsSaving(false);
     }
@@ -145,7 +128,6 @@ export default function PerfilPage() {
 
   return (
     <div className={styles.page}>
-      <ToastViewport toasts={toasts} onDismiss={dismissToast} />
       <div className={styles.card}>
         <aside className={styles.sidebar}>
           <div className={styles.avatar}>{initials}</div>

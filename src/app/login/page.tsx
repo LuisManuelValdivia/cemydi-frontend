@@ -3,13 +3,12 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { loginUser } from "@/services/auth";
+import { loginUser, resendVerificationEmail } from "@/services/auth";
 import { useAuth } from "@/context/AuthContext";
 import toast from "react-hot-toast";
 import styles from "./login.module.css";
-
 export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuth();
@@ -25,20 +24,36 @@ export default function LoginPage() {
   });
 
   const [loading, setLoading] = useState(false);
+  const [resendingVerification, setResendingVerification] = useState(false);
+  const [showResendVerification, setShowResendVerification] = useState(false);
+
+  useEffect(() => {
+    const currentUrl = new URL(window.location.href);
+    const verificationStatus = currentUrl.searchParams.get("verified");
+
+    if (!verificationStatus) {
+      return;
+    }
+
+    if (verificationStatus === "success") {
+      toast.success("Tu correo ha sido verificado correctamente.");
+    } else if (verificationStatus === "error") {
+      toast.error("No se pudo verificar el correo o el enlace ya expiró.");
+    }
+
+    currentUrl.searchParams.delete("verified");
+    window.history.replaceState({}, "", currentUrl.pathname + currentUrl.search);
+  }, []);
 
   const validate = (name: string, value: string) => {
     let error = "";
 
-    if (name === "correo") {
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
-        error = "Correo inválido";
-      }
+    if (name === "correo" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+      error = "Correo inválido";
     }
 
-    if (name === "password") {
-      if (!value) {
-        error = "La contraseña es obligatoria";
-      }
+    if (name === "password" && !value) {
+      error = "La contraseña es obligatoria";
     }
 
     setErrors((prev) => ({ ...prev, [name]: error }));
@@ -63,12 +78,13 @@ export default function LoginPage() {
 
     try {
       setLoading(true);
+      setShowResendVerification(false);
 
       const result = await loginUser(form);
 
       login({ user: result.user });
 
-      toast.success("¡Bienvenido!");
+      toast.success("Bienvenido");
       if (result.user?.rol === "ADMIN") {
         router.push("/admin");
       } else {
@@ -77,9 +93,29 @@ export default function LoginPage() {
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : "No se pudo iniciar sesión. Verifica tus datos.";
+      setShowResendVerification(message.toLowerCase().includes("verificar tu correo"));
       toast.error(message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    if (!form.correo.trim()) {
+      toast.error("Ingresa tu correo para reenviar el enlace.");
+      return;
+    }
+
+    try {
+      setResendingVerification(true);
+      const result = await resendVerificationEmail(form.correo);
+      toast.success(result.message);
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : "No se pudo reenviar el enlace de verificación.";
+      toast.error(message);
+    } finally {
+      setResendingVerification(false);
     }
   };
 
@@ -128,6 +164,20 @@ export default function LoginPage() {
                 {loading ? "Entrando..." : "Entrar a mi cuenta"}
               </button>
             </form>
+
+            {showResendVerification ? (
+              <div className={styles.secondaryAction}>
+                <p>Tu cuenta aún no está verificada.</p>
+                <button
+                  type="button"
+                  onClick={handleResendVerification}
+                  disabled={resendingVerification}
+                  className={styles.secondaryButton}
+                >
+                  {resendingVerification ? "Reenviando..." : "Reenviar enlace de verificación"}
+                </button>
+              </div>
+            ) : null}
           </div>
         </div>
       </div>

@@ -85,14 +85,14 @@ export default function RegisterPage() {
     try {
       setLoading(true);
 
-      await registerUser({
+      const result = await registerUser({
         nombre: form.nombre,
         correo: form.correo,
         password: form.password,
       });
-      toast.success("Cuenta creada correctamente. Redirigiendo al login...");
+      toast.success(result.message);
       await new Promise((resolve) => setTimeout(resolve, 900));
-      router.push("/login");
+      router.push(`/verify-email?correo=${encodeURIComponent(form.correo)}`);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "No se pudo registrar la cuenta.";
       toast.error(message);

@@ -8,6 +8,41 @@ type UpdateProfilePayload = {
   password?: string;
 };
 
+export async function getMyProfile() {
+  const res = await fetch(`${API_URL}/users/me`, {
+    method: "GET",
+    credentials: "include",
+  });
+
+  const result = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    const message =
+      result &&
+      typeof result === "object" &&
+      "message" in result &&
+      typeof result.message === "string"
+        ? result.message
+        : "No se pudo obtener la sesion actual";
+
+    throw new Error(message);
+  }
+
+  return result as {
+    user: {
+      id: number;
+      nombre: string;
+      correo: string;
+      telefono: string | null;
+      direccion: string | null;
+      rol: string;
+      activo: boolean;
+      emailVerified: boolean;
+      emailVerifiedAt: string | null;
+    };
+  };
+}
+
 export async function updateMyProfile(data: UpdateProfilePayload) {
   const res = await fetch(`${API_URL}/users/me`, {
     method: "PATCH",
