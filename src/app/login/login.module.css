@@ -108,6 +108,12 @@
   color: #dc2626;
 }
 
+.description {
+  margin: -6px 0 18px;
+  color: #4b5563;
+  font-size: 14px;
+}
+
 .forgotLink {
   justify-self: end;
   margin-top: 2px;
@@ -138,6 +144,49 @@
 .card button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.secondaryAction {
+  margin-top: 16px;
+  display: grid;
+  gap: 10px;
+}
+
+.secondaryAction p,
+.statusText {
+  margin: 0;
+  font-size: 14px;
+  color: #4b5563;
+}
+
+.secondaryButton,
+.primaryLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 14px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.secondaryButton {
+  border: 1px solid #1e6260;
+  background: transparent;
+  color: #1e6260;
+  cursor: pointer;
+}
+
+.secondaryButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.primaryLink {
+  margin-top: 8px;
+  background: #1e6260;
+  color: #fff;
 }
 
 @media (min-width: 900px) {

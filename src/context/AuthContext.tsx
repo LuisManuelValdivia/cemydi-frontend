@@ -1,14 +1,20 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import type { AuthUser } from "@/services/auth";
+import { getMyProfile } from "@/services/users";
 
-type User = {
-  id?: number;
-  nombre?: string;
-  correo?: string;
+const LEGACY_AUTH_STORAGE_KEYS = [
+  "accessToken",
+  "authUser",
+  "user",
+  "lastActivity",
+  "GDPR_REMOVAL_FLAG",
+] as const;
+
+type User = AuthUser & {
   telefono?: string | null;
   direccion?: string | null;
-  rol?: string;
   [key: string]: unknown;
 };
 
@@ -26,41 +32,54 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Hidrata desde localStorage al montar
   useEffect(() => {
-    try {
-      const storedUser = localStorage.getItem("user");
-      if (storedUser) setUser(JSON.parse(storedUser));
-    } catch {
-      setUser(null);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    let cancelled = false;
 
-  // Sincroniza entre pestañas
-  useEffect(() => {
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === "user") {
-        setUser(e.newValue ? JSON.parse(e.newValue) : null);
+    const clearLegacyAuthStorage = () => {
+      for (const key of LEGACY_AUTH_STORAGE_KEYS) {
+        localStorage.removeItem(key);
       }
     };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+
+    const hydrateAuth = async () => {
+      clearLegacyAuthStorage();
+
+      try {
+        const result = await getMyProfile();
+        if (cancelled) return;
+
+        setUser(result.user);
+      } catch {
+        if (cancelled) return;
+
+        clearLegacyAuthStorage();
+        setUser(null);
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void hydrateAuth();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const login = ({ user }: { user: User }) => {
-    localStorage.setItem("user", JSON.stringify(user));
-    setUser(user); // <- clave para refrescar header inmediatamente
+    setUser(user);
   };
 
   const updateUser = (nextUser: User) => {
-    localStorage.setItem("user", JSON.stringify(nextUser));
     setUser(nextUser);
   };
 
   const logout = () => {
-    localStorage.removeItem("user");
+    for (const key of LEGACY_AUTH_STORAGE_KEYS) {
+      localStorage.removeItem(key);
+    }
     setUser(null);
   };
 

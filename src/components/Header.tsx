@@ -109,12 +109,6 @@ export default function Header() {
           </>
         ) : (
           <>
-            <Link href="/mis-rentas" className={styles.link}>
-              Mis rentas
-            </Link>
-            <Link href="/mis-compras" className={styles.link}>
-              Mis compras
-            </Link>
             {user.rol === "ADMIN" ? (
               <Link href="/admin" className={styles.link}>
                 Panel Admin

@@ -60,7 +60,7 @@ import {
   updateUser,
 } from "@/services/admin";
 import { logoutUser } from "@/services/auth";
-import { ConfirmDialog, ToastViewport, type ToastItem } from "@/components/feedback";
+import { ConfirmDialog } from "@/components/feedback";
 import { updateMyProfile } from "@/services/users";
 import styles from "./admin.module.css";
 
@@ -1180,7 +1180,6 @@ export default function AdminDashboardPage() {
   const [ready, setReady] = useState(false);
   const [section, setSection] = useState<Section>("overview");
   const [notice, setNotice] = useState<Notice>(null);
-  const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
 
@@ -1713,26 +1712,15 @@ export default function AdminDashboardPage() {
     }
   }, [editingSupplierId, suppliers]);
 
-  const pushToast = useCallback((type: ToastItem["type"], text: string) => {
-    setToasts((prev) => [
-      ...prev,
-      {
-        id: Date.now() + Math.floor(Math.random() * 10000),
-        type,
-        text,
-      },
-    ]);
-  }, []);
-
-  const dismissToast = useCallback((id: number) => {
-    setToasts((prev) => prev.filter((item) => item.id !== id));
-  }, []);
-
   useEffect(() => {
     if (!notice) return;
-    pushToast(notice.type, notice.text);
+    if (notice.type === "success") {
+      toast.success(notice.text);
+    } else {
+      toast.error(notice.text);
+    }
     setNotice(null);
-  }, [notice, pushToast]);
+  }, [notice]);
 
   const requestConfirmation = useCallback((request: ConfirmRequest) => {
     setConfirmRequest(request);
@@ -6153,7 +6141,6 @@ export default function AdminDashboardPage() {
           </section>
         ) : null}
 
-        <ToastViewport toasts={toasts} onDismiss={dismissToast} />
         <ConfirmDialog
           open={Boolean(confirmRequest)}
           title={confirmRequest?.title ?? "Confirmar accion"}
