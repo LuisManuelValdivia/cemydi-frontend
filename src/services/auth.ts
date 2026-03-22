@@ -10,6 +10,7 @@ export async function registerUser(data: {
     headers: {
       "Content-Type": "application/json",
     },
+    credentials: "include",
     body: JSON.stringify(data),
   });
 
@@ -31,6 +32,7 @@ export async function loginUser(data: {
     headers: {
       "Content-Type": "application/json",
     },
+    credentials: "include",
     body: JSON.stringify(data),
   });
 
@@ -43,12 +45,10 @@ export async function loginUser(data: {
   return result;
 }
 
-export async function logoutUser(token: string) {
+export async function logoutUser() {
   const res = await fetch(`${API_URL}/auth/logout`, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
+    credentials: "include",
   });
 
   const result = await res.json().catch(() => ({ message: "Sesion cerrada correctamente" }));

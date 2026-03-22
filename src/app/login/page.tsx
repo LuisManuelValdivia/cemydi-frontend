@@ -65,7 +65,7 @@ export default function LoginPage() {
 
       const result = await loginUser(form);
 
-      login({ user: result.user, token: result.access_token });
+      login({ user: result.user });
 
       toast.success("¡Bienvenido!");
       if (result.user?.rol === "ADMIN") {

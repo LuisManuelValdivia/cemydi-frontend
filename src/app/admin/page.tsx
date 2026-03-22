@@ -1178,7 +1178,6 @@ export default function AdminDashboardPage() {
   const { user, loading, logout, updateUser: syncUser } = useAuth();
 
   const [ready, setReady] = useState(false);
-  const [token, setToken] = useState<string | null>(null);
   const [section, setSection] = useState<Section>("overview");
   const [notice, setNotice] = useState<Notice>(null);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
@@ -1773,7 +1772,7 @@ export default function AdminDashboardPage() {
     return false;
   }, [logout, router]);
 
-  const loadDashboard = useCallback(async (sessionToken: string) => {
+  const loadDashboard = useCallback(async () => {
     try {
       setLoadingData(true);
       const [
@@ -1785,12 +1784,12 @@ export default function AdminDashboardPage() {
         reviewsResult,
       ] =
         await Promise.all([
-          listUsers(sessionToken),
-          listProducts(sessionToken),
-          listCatalogs(sessionToken),
-          listSuppliers(sessionToken),
-          listPromotions(sessionToken),
-          listAdminReviews(sessionToken, { status: "ALL" }),
+          listUsers(),
+          listProducts(),
+          listCatalogs(),
+          listSuppliers(),
+          listPromotions(),
+          listAdminReviews({ status: "ALL" }),
         ]);
       setUsers(usersResult.users);
       setProducts(productsResult.products);
@@ -1811,10 +1810,10 @@ export default function AdminDashboardPage() {
     }
   }, [handleSessionError]);
 
-  const loadDatabaseStats = useCallback(async (sessionToken: string) => {
+  const loadDatabaseStats = useCallback(async () => {
     try {
       setLoadingDbStatus(true);
-      const result = await getDatabaseStatus(sessionToken);
+      const result = await getDatabaseStatus();
       setDbStatus(result.status);
     } catch (error) {
       const message =
@@ -1827,10 +1826,10 @@ export default function AdminDashboardPage() {
     }
   }, [handleSessionError]);
 
-  const loadBackupRecords = useCallback(async (sessionToken: string) => {
+  const loadBackupRecords = useCallback(async () => {
     try {
       setLoadingBackupRecords(true);
-      const result = await listDatabaseBackups(sessionToken);
+      const result = await listDatabaseBackups();
       setBackupRecords(result.backups);
     } catch (error) {
       const message =
@@ -1843,10 +1842,10 @@ export default function AdminDashboardPage() {
     }
   }, [handleSessionError]);
 
-  const loadBackupSchedule = useCallback(async (sessionToken: string) => {
+  const loadBackupSchedule = useCallback(async () => {
     try {
       setLoadingBackupSchedule(true);
-      const result = await getDatabaseBackupSchedule(sessionToken);
+      const result = await getDatabaseBackupSchedule();
       setBackupSchedule(result.schedule);
     } catch (error) {
       const message =
@@ -1859,10 +1858,10 @@ export default function AdminDashboardPage() {
     }
   }, [handleSessionError]);
 
-  const loadAuthSecurityData = useCallback(async (sessionToken: string) => {
+  const loadAuthSecurityData = useCallback(async () => {
     try {
       setLoadingAuthSecurityOverview(true);
-      const result = await getAuthSecurityOverview(sessionToken);
+      const result = await getAuthSecurityOverview();
       setAuthSecurityOverview(result.overview);
     } catch (error) {
       const message =
@@ -1888,13 +1887,6 @@ export default function AdminDashboardPage() {
       return;
     }
 
-    const storedToken = localStorage.getItem("token");
-    if (!storedToken) {
-      logout();
-      router.replace("/login");
-      return;
-    }
-
     setProfileForm({
       nombre: String(user.nombre ?? ""),
       correo: String(user.correo ?? ""),
@@ -1903,13 +1895,12 @@ export default function AdminDashboardPage() {
       password: "",
       confirmPassword: "",
     });
-    setToken(storedToken);
     setReady(true);
-    void loadDashboard(storedToken);
-    void loadDatabaseStats(storedToken);
-    void loadBackupRecords(storedToken);
-    void loadBackupSchedule(storedToken);
-    void loadAuthSecurityData(storedToken);
+    void loadDashboard();
+    void loadDatabaseStats();
+    void loadBackupRecords();
+    void loadBackupSchedule();
+    void loadAuthSecurityData();
   }, [
     loadAuthSecurityData,
     loadBackupRecords,
@@ -1923,15 +1914,15 @@ export default function AdminDashboardPage() {
   ]);
 
   useEffect(() => {
-    if (section !== "dbMonitoring" || !token) {
+    if (section !== "dbMonitoring" || !user) {
       return;
     }
 
-    void loadDatabaseStats(token);
-    void loadBackupRecords(token);
-    void loadBackupSchedule(token);
-    void loadAuthSecurityData(token);
-  }, [loadAuthSecurityData, loadBackupRecords, loadBackupSchedule, loadDatabaseStats, section, token]);
+    void loadDatabaseStats();
+    void loadBackupRecords();
+    void loadBackupSchedule();
+    void loadAuthSecurityData();
+  }, [loadAuthSecurityData, loadBackupRecords, loadBackupSchedule, loadDatabaseStats, section, user]);
 
   const onUserInput = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -1945,7 +1936,7 @@ export default function AdminDashboardPage() {
 
   const submitUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token) return;
+    if (!user) return;
 
     const userValidationError = validateUserPayload(userForm, Boolean(editingUserId));
     if (userValidationError) {
@@ -1968,13 +1959,13 @@ export default function AdminDashboardPage() {
             ? { password: userForm.password.trim() }
             : {}),
         };
-        const result = await updateUser(token, editingUserId, payload);
+        const result = await updateUser( editingUserId, payload);
         setUsers((prev) =>
           prev.map((item) => (item.id === editingUserId ? result.user : item)),
         );
         setNotice({ type: "success", text: "Usuario actualizado." });
       } else {
-        const result = await createUser(token, {
+        const result = await createUser( {
           nombre: userForm.nombre.trim(),
           correo: userForm.correo.trim(),
           password: userForm.password.trim(),
@@ -2015,10 +2006,10 @@ export default function AdminDashboardPage() {
   };
 
   const removeUser = async (id: number) => {
-    if (!token) return;
+    if (!user) return;
 
     try {
-      await deleteUser(token, id);
+      await deleteUser( id);
       setUsers((prev) => prev.filter((item) => item.id !== id));
       setNotice({ type: "success", text: "Usuario eliminado." });
     } catch (error) {
@@ -2031,10 +2022,10 @@ export default function AdminDashboardPage() {
   };
 
   const toggleUserStatus = async (item: AdminUser) => {
-    if (!token) return;
+    if (!user) return;
 
     try {
-      const result = await updateUser(token, item.id, { activo: !item.activo });
+      const result = await updateUser( item.id, { activo: !item.activo });
       setUsers((prev) =>
         prev.map((userItem) => (userItem.id === item.id ? result.user : userItem)),
       );
@@ -2077,7 +2068,7 @@ export default function AdminDashboardPage() {
 
   const submitProduct = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token) return;
+    if (!user) return;
 
     const productValidationError = validateProductPayload(productForm);
     if (productValidationError) {
@@ -2103,7 +2094,7 @@ export default function AdminDashboardPage() {
       setSavingProduct(true);
 
       if (editingProductId) {
-        const result = await updateProduct(token, editingProductId, payload);
+        const result = await updateProduct( editingProductId, payload);
         setProducts((prev) =>
           prev.map((item) =>
             item.id === editingProductId ? result.product : item,
@@ -2111,7 +2102,7 @@ export default function AdminDashboardPage() {
         );
         setNotice({ type: "success", text: "Producto actualizado." });
       } else {
-        const result = await createProduct(token, payload);
+        const result = await createProduct( payload);
         setProducts((prev) => [result.product, ...prev]);
         setProductPage(1);
         setNotice({ type: "success", text: "Producto creado." });
@@ -2148,10 +2139,10 @@ export default function AdminDashboardPage() {
   };
 
   const removeProduct = async (id: number) => {
-    if (!token) return;
+    if (!user) return;
 
     try {
-      await deleteProduct(token, id);
+      await deleteProduct( id);
       setProducts((prev) => prev.filter((item) => item.id !== id));
       setNotice({ type: "success", text: "Producto eliminado." });
     } catch (error) {
@@ -2164,10 +2155,10 @@ export default function AdminDashboardPage() {
   };
 
   const toggleProductStatus = async (item: AdminProduct) => {
-    if (!token) return;
+    if (!user) return;
 
     try {
-      const result = await updateProduct(token, item.id, { activo: !item.activo });
+      const result = await updateProduct( item.id, { activo: !item.activo });
       setProducts((prev) =>
         prev.map((product) => (product.id === item.id ? result.product : product)),
       );
@@ -2243,7 +2234,7 @@ export default function AdminDashboardPage() {
   };
 
   const importProductsFromCsv = async () => {
-    if (!token || !productImportPreview) return;
+    if (!user || !productImportPreview) return;
 
     const rowsToImport = productImportSummary.validRows;
     if (rowsToImport.length === 0) {
@@ -2261,7 +2252,7 @@ export default function AdminDashboardPage() {
 
       for (const row of rowsToImport) {
         try {
-          const result = await createProduct(token, row.payload);
+          const result = await createProduct( row.payload);
           createdProducts.push(result.product);
         } catch {
           failedRows += 1;
@@ -2498,11 +2489,11 @@ export default function AdminDashboardPage() {
   };
 
   const removeSelectedBrands = async (ids: number[]) => {
-    if (!token || ids.length === 0) return;
+    if (!user || ids.length === 0) return;
 
     try {
       setSavingCatalog("brand");
-      await Promise.all(ids.map((id) => deleteBrand(token, id)));
+      await Promise.all(ids.map((id) => deleteBrand( id)));
       setBrands((prev) => prev.filter((item) => !ids.includes(item.id)));
       setSelectedBrandIds((prev) => prev.filter((id) => !ids.includes(id)));
       if (editingBrandId && ids.includes(editingBrandId)) {
@@ -2524,11 +2515,11 @@ export default function AdminDashboardPage() {
   };
 
   const removeSelectedClassifications = async (ids: number[]) => {
-    if (!token || ids.length === 0) return;
+    if (!user || ids.length === 0) return;
 
     try {
       setSavingCatalog("classification");
-      await Promise.all(ids.map((id) => deleteClassification(token, id)));
+      await Promise.all(ids.map((id) => deleteClassification( id)));
       setClassifications((prev) => prev.filter((item) => !ids.includes(item.id)));
       setSelectedClassificationIds((prev) => prev.filter((id) => !ids.includes(id)));
       if (editingClassificationId && ids.includes(editingClassificationId)) {
@@ -2587,11 +2578,11 @@ export default function AdminDashboardPage() {
   };
 
   const removeSelectedSuppliers = async (ids: number[]) => {
-    if (!token || ids.length === 0) return;
+    if (!user || ids.length === 0) return;
 
     try {
       setSavingSupplier(true);
-      await Promise.all(ids.map((id) => deleteSupplier(token, id)));
+      await Promise.all(ids.map((id) => deleteSupplier( id)));
       setSuppliers((prev) => prev.filter((item) => !ids.includes(item.id)));
       setSelectedSupplierIds((prev) => prev.filter((id) => !ids.includes(id)));
       if (editingSupplierId && ids.includes(editingSupplierId)) {
@@ -2658,7 +2649,7 @@ export default function AdminDashboardPage() {
 
   const submitBrand = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token) return;
+    if (!user) return;
 
     const validationError = validateCatalogName(catalogForm.marca, "Marca");
     if (validationError) {
@@ -2669,7 +2660,7 @@ export default function AdminDashboardPage() {
     try {
       setSavingCatalog("brand");
       if (editingBrandId) {
-        const result = await updateBrand(token, editingBrandId, {
+        const result = await updateBrand( editingBrandId, {
           nombre: catalogForm.marca.trim(),
         });
         setBrands((prev) =>
@@ -2679,7 +2670,7 @@ export default function AdminDashboardPage() {
         resetBrandEditor();
         setNotice({ type: "success", text: "Marca actualizada." });
       } else {
-        const result = await createBrand(token, {
+        const result = await createBrand( {
           nombre: catalogForm.marca.trim(),
         });
         setBrands((prev) => sortByName([...prev, result.brand]));
@@ -2700,7 +2691,7 @@ export default function AdminDashboardPage() {
 
   const submitClassification = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token) return;
+    if (!user) return;
 
     const validationError = validateCatalogName(
       catalogForm.clasificacion,
@@ -2714,7 +2705,7 @@ export default function AdminDashboardPage() {
     try {
       setSavingCatalog("classification");
       if (editingClassificationId) {
-        const result = await updateClassification(token, editingClassificationId, {
+        const result = await updateClassification( editingClassificationId, {
           nombre: catalogForm.clasificacion.trim(),
         });
         setClassifications((prev) =>
@@ -2728,7 +2719,7 @@ export default function AdminDashboardPage() {
         resetClassificationEditor();
         setNotice({ type: "success", text: "Clasificacion actualizada." });
       } else {
-        const result = await createClassification(token, {
+        const result = await createClassification( {
           nombre: catalogForm.clasificacion.trim(),
         });
         setClassifications((prev) =>
@@ -2753,7 +2744,7 @@ export default function AdminDashboardPage() {
 
   const submitSupplier = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token) return;
+    if (!user) return;
 
     const validationError = validateSupplierPayload(supplierForm);
     if (validationError) {
@@ -2771,7 +2762,7 @@ export default function AdminDashboardPage() {
       };
 
       if (editingSupplierId) {
-        const result = await updateSupplier(token, editingSupplierId, payload);
+        const result = await updateSupplier( editingSupplierId, payload);
         setSuppliers((prev) =>
           sortByName(
             prev.map((item) => (item.id === editingSupplierId ? result.supplier : item)),
@@ -2781,7 +2772,7 @@ export default function AdminDashboardPage() {
         resetSupplierForm();
         setNotice({ type: "success", text: "Proveedor actualizado." });
       } else {
-        const result = await createSupplier(token, payload);
+        const result = await createSupplier( payload);
         setSuppliers((prev) => sortByName([...prev, result.supplier]));
         setSupplierForm(defaultSupplierForm);
         setNotice({ type: "success", text: "Proveedor creado." });
@@ -2824,7 +2815,7 @@ export default function AdminDashboardPage() {
 
   const submitPromotion = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token) return;
+    if (!user) return;
 
     const validationError = validatePromotionPayload(promotionForm);
     if (validationError) {
@@ -2846,7 +2837,7 @@ export default function AdminDashboardPage() {
       setSavingPromotion(true);
 
       if (editingPromotionId) {
-        const result = await updatePromotion(token, editingPromotionId, commonPayload);
+        const result = await updatePromotion( editingPromotionId, commonPayload);
         setPromotions((prev) =>
           prev.map((item) => (item.id === editingPromotionId ? result.promotion : item)),
         );
@@ -2863,7 +2854,7 @@ export default function AdminDashboardPage() {
             : { clasificacion: promotionForm.clasificacion.trim() }),
         };
 
-        const result = await createPromotion(token, payload);
+        const result = await createPromotion( payload);
         setPromotions((prev) => [...result.promotions, ...prev]);
         setPromotionPage(1);
         setNotice({ type: "success", text: result.message });
@@ -2897,10 +2888,10 @@ export default function AdminDashboardPage() {
   };
 
   const removePromotion = async (id: number) => {
-    if (!token) return;
+    if (!user) return;
 
     try {
-      await deletePromotion(token, id);
+      await deletePromotion( id);
       setPromotions((prev) => prev.filter((item) => item.id !== id));
       if (editingPromotionId === id) {
         resetPromotionForm();
@@ -2916,11 +2907,11 @@ export default function AdminDashboardPage() {
   };
 
   const approvePendingReview = async (id: number) => {
-    if (!token) return;
+    if (!user) return;
 
     try {
       setReviewActionId(id);
-      const result = await approveReview(token, id);
+      const result = await approveReview( id);
       setReviews((prev) =>
         prev.map((item) => (item.id === id ? result.review : item)),
       );
@@ -2937,11 +2928,11 @@ export default function AdminDashboardPage() {
   };
 
   const removeReviewItem = async (id: number) => {
-    if (!token) return;
+    if (!user) return;
 
     try {
       setReviewActionId(id);
-      await deleteReview(token, id);
+      await deleteReview( id);
       setReviews((prev) => prev.filter((item) => item.id !== id));
       setNotice({ type: "success", text: "Reseña eliminada." });
     } catch (error) {
@@ -2957,7 +2948,7 @@ export default function AdminDashboardPage() {
 
   const submitProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token) return;
+    if (!user) return;
 
     const profileValidationError = validateProfilePayload(profileForm);
     if (profileValidationError) {
@@ -2967,18 +2958,15 @@ export default function AdminDashboardPage() {
 
     try {
       setSavingProfile(true);
-      const result = await updateMyProfile(
-        {
-          nombre: profileForm.nombre.trim(),
-          correo: profileForm.correo.trim(),
-          telefono: profileForm.telefono.trim(),
-          direccion: profileForm.direccion.trim(),
-          ...(profileForm.password.trim()
-            ? { password: profileForm.password.trim() }
-            : {}),
-        },
-        token,
-      );
+      const result = await updateMyProfile({
+        nombre: profileForm.nombre.trim(),
+        correo: profileForm.correo.trim(),
+        telefono: profileForm.telefono.trim(),
+        direccion: profileForm.direccion.trim(),
+        ...(profileForm.password.trim()
+          ? { password: profileForm.password.trim() }
+          : {}),
+      });
       syncUser(result.user);
       setProfileForm((prev) => ({
         ...prev,
@@ -2998,14 +2986,14 @@ export default function AdminDashboardPage() {
   };
 
   const generateBackup = async () => {
-    if (!token) return;
+    if (!user) return;
 
     try {
       setGeneratingBackup(true);
-      const result = await createDatabaseBackupRecord(token);
+      const result = await createDatabaseBackupRecord();
       setBackupRecords((prev) => [result.backup, ...prev]);
       setBackupPage(1);
-      void loadDatabaseStats(token);
+      void loadDatabaseStats();
       setNotice({
         type: "success",
         text: `Respaldo generado: ${result.backup.fileName}`,
@@ -3024,7 +3012,7 @@ export default function AdminDashboardPage() {
   };
 
   const generateSingleTableBackup = async () => {
-    if (!token) return;
+    if (!user) return;
 
     if (!selectedBackupTable) {
       setNotice({ type: "error", text: "Selecciona una tabla para generar el respaldo." });
@@ -3033,10 +3021,10 @@ export default function AdminDashboardPage() {
 
     try {
       setGeneratingTableBackup(true);
-      const result = await createSingleTableDatabaseBackupRecord(token, selectedBackupTable);
+      const result = await createSingleTableDatabaseBackupRecord( selectedBackupTable);
       setBackupRecords((prev) => [result.backup, ...prev]);
       setBackupPage(1);
-      void loadDatabaseStats(token);
+      void loadDatabaseStats();
       setNotice({
         type: "success",
         text: `Respaldo de tabla generado: ${result.backup.fileName}`,
@@ -3055,11 +3043,11 @@ export default function AdminDashboardPage() {
   };
 
   const downloadBackupRecord = async (backup: DatabaseBackupRecord) => {
-    if (!token) return;
+    if (!user) return;
 
     try {
       setDownloadingBackupId(backup.id);
-      const download = await downloadDatabaseBackupById(token, backup.id);
+      const download = await downloadDatabaseBackupById( backup.id);
       const saved = await saveBlobAsFile(download.blob, download.fileName);
       if (!saved) {
         setNotice({ type: "error", text: "Descarga cancelada por el usuario." });
@@ -3077,11 +3065,11 @@ export default function AdminDashboardPage() {
   };
 
   const removeBackupRecord = async (backup: DatabaseBackupRecord) => {
-    if (!token) return;
+    if (!user) return;
 
     try {
       setDeletingBackupId(backup.id);
-      const result = await deleteDatabaseBackupRecord(token, backup.id);
+      const result = await deleteDatabaseBackupRecord( backup.id);
       setBackupRecords((prev) => prev.filter((item) => item.id !== backup.id));
       setNotice({
         type: "success",
@@ -3128,7 +3116,7 @@ export default function AdminDashboardPage() {
   };
 
   const saveBackupSchedule = async () => {
-    if (!token) return;
+    if (!user) return;
 
     const validationError = validateBackupScheduleForm(backupScheduleForm);
     if (validationError) {
@@ -3138,7 +3126,7 @@ export default function AdminDashboardPage() {
 
     try {
       setSavingBackupSchedule(true);
-      const result = await updateDatabaseBackupSchedule(token, {
+      const result = await updateDatabaseBackupSchedule( {
         enabled: backupScheduleForm.enabled,
         everyDays: Number(backupScheduleForm.everyDays),
         runAtTime: backupScheduleForm.runAtTime.trim(),
@@ -3180,11 +3168,11 @@ export default function AdminDashboardPage() {
   }, [backupSchedule]);
 
   const removeBackupSchedule = async () => {
-    if (!token) return;
+    if (!user) return;
 
     try {
       setSavingBackupSchedule(true);
-      const result = await deleteDatabaseBackupSchedule(token);
+      const result = await deleteDatabaseBackupSchedule();
       setBackupSchedule(result.schedule);
       setNotice({
         type: "success",
@@ -3204,33 +3192,28 @@ export default function AdminDashboardPage() {
   };
 
   const refreshAdminData = async () => {
-    if (!token) return;
+    if (!user) return;
 
     await Promise.all([
-      loadDashboard(token),
-      loadDatabaseStats(token),
-      loadBackupRecords(token),
-      loadBackupSchedule(token),
-      loadAuthSecurityData(token),
+      loadDashboard(),
+      loadDatabaseStats(),
+      loadBackupRecords(),
+      loadBackupSchedule(),
+      loadAuthSecurityData(),
     ]);
   };
 
   const performLogout = useCallback(async () => {
-    const sessionToken =
-      token ?? (typeof window !== "undefined" ? localStorage.getItem("token") : null);
-
     try {
-      if (sessionToken) {
-        await logoutUser(sessionToken);
-      }
+      await logoutUser();
     } catch {
-      // Si el token ya no es valido, igual limpiamos la sesion local.
+      // Si la sesion ya no es valida, igual limpiamos el estado local.
     } finally {
       logout();
       toast.success("Sesion cerrada correctamente");
       router.push("/login");
     }
-  }, [logout, router, token]);
+  }, [logout, router]);
 
   if (!ready) {
     return <p className={styles.loading}>Cargando dashboard...</p>;
@@ -5517,12 +5500,12 @@ export default function AdminDashboardPage() {
                 type="button"
                 className={styles.ghostBtn}
                 onClick={() =>
-                  void (token &&
+                  void (user &&
                     Promise.all([
-                      loadAuthSecurityData(token),
-                      loadDatabaseStats(token),
-                      loadBackupRecords(token),
-                      loadBackupSchedule(token),
+                      loadAuthSecurityData(),
+                      loadDatabaseStats(),
+                      loadBackupRecords(),
+                      loadBackupSchedule(),
                     ]))
                 }
                 disabled={
@@ -5821,7 +5804,7 @@ export default function AdminDashboardPage() {
                   <button
                     type="button"
                     className={styles.ghostBtn}
-                    onClick={() => void (token && loadBackupRecords(token))}
+                    onClick={() => void (user && loadBackupRecords())}
                     disabled={loadingBackupRecords || generatingBackup || generatingTableBackup}
                   >
                     {loadingBackupRecords ? "Recargando..." : "Recargar historial"}
@@ -5946,7 +5929,7 @@ export default function AdminDashboardPage() {
                   <button
                     type="button"
                     className={styles.ghostBtn}
-                    onClick={() => void (token && loadBackupSchedule(token))}
+                    onClick={() => void (user && loadBackupSchedule())}
                     disabled={loadingBackupSchedule || savingBackupSchedule}
                   >
                     {loadingBackupSchedule ? "Recargando..." : "Recargar programacion"}
