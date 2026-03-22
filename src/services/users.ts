@@ -8,16 +8,13 @@ type UpdateProfilePayload = {
   password?: string;
 };
 
-export async function updateMyProfile(
-  data: UpdateProfilePayload,
-  token: string
-) {
+export async function updateMyProfile(data: UpdateProfilePayload) {
   const res = await fetch(`${API_URL}/users/me`, {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
     },
+    credentials: "include",
     body: JSON.stringify(data),
   });
 

@@ -49,16 +49,17 @@ export async function getApprovedProductReviews(productId: number) {
   return result as { reviews: ProductReview[]; summary: ProductReviewSummary };
 }
 
-export async function createProductReview(
-  token: string,
-  payload: { productId: number; rating: number; comment: string },
-) {
+export async function createProductReview(payload: {
+  productId: number;
+  rating: number;
+  comment: string;
+}) {
   const res = await fetch(`${API_URL}/reviews`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
     },
+    credentials: "include",
     body: JSON.stringify(payload),
   });
 
@@ -71,13 +72,11 @@ export async function createProductReview(
   return result as { message: string; review: MyProductReview };
 }
 
-export async function getMyProductReview(token: string, productId: number) {
+export async function getMyProductReview(productId: number) {
   const res = await fetch(`${API_URL}/reviews/product/${productId}/mine`, {
     method: "GET",
     cache: "no-store",
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
+    credentials: "include",
   });
   const result = (await res.json()) as
     | { review: MyProductReview | null }

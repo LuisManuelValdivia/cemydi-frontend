@@ -105,24 +105,15 @@ export default function PerfilPage() {
       return;
     }
 
-    const token = localStorage.getItem("token");
-    if (!token) {
-      pushToast("error", "Tu sesion expiro. Inicia sesion de nuevo.");
-      return;
-    }
-
     try {
       setIsSaving(true);
 
-      const result = await updateMyProfile(
-        {
-          nombre,
-          correo,
-          telefono: form.telefono.trim(),
-          direccion: form.direccion.trim(),
-        },
-        token
-      );
+      const result = await updateMyProfile({
+        nombre,
+        correo,
+        telefono: form.telefono.trim(),
+        direccion: form.direccion.trim(),
+      });
 
       updateUser(result.user);
       setForm(toForm(result.user as Record<string, unknown>));
@@ -138,12 +129,8 @@ export default function PerfilPage() {
   };
 
   const handleLogout = async () => {
-    const token = localStorage.getItem("token");
-
     try {
-      if (token) {
-        await logoutUser(token);
-      }
+      await logoutUser();
     } catch {
       // Si la sesion ya expiro, igual limpiamos el estado local.
     } finally {

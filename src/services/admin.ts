@@ -273,11 +273,7 @@ function resolveFileNameFromDisposition(
   return fallback;
 }
 
-async function request<T>(
-  path: string,
-  token: string | null,
-  init?: RequestInit
-): Promise<T> {
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
@@ -286,13 +282,10 @@ async function request<T>(
     Object.assign(headers, init.headers as Record<string, string>);
   }
 
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-
   const res = await fetch(`${API_URL}${path}`, {
-    ...init,
+    ...(init ?? {}),
     headers,
+    credentials: "include",
   });
 
   const result = await res.json();
@@ -304,114 +297,86 @@ async function request<T>(
   return result as T;
 }
 
-export function listUsers(token: string) {
-  return request<{ users: AdminUser[] }>("/users", token, { method: "GET" });
+export function listUsers() {
+  return request<{ users: AdminUser[] }>("/users", { method: "GET" });
 }
 
-export function createUser(token: string, payload: CreateUserPayload) {
-  return request<{ user: AdminUser; message: string }>("/users", token, {
+export function createUser(payload: CreateUserPayload) {
+  return request<{ user: AdminUser; message: string }>("/users", {
     method: "POST",
     body: JSON.stringify(payload),
   });
 }
 
-export function updateUser(
-  token: string,
-  id: number,
-  payload: UpdateUserPayload
-) {
-  return request<{ user: AdminUser; message: string }>(`/users/${id}`, token, {
+export function updateUser(id: number, payload: UpdateUserPayload) {
+  return request<{ user: AdminUser; message: string }>(`/users/${id}`, {
     method: "PATCH",
     body: JSON.stringify(payload),
   });
 }
 
-export function deleteUser(token: string, id: number) {
-  return request<{ message: string }>(`/users/${id}`, token, {
+export function deleteUser(id: number) {
+  return request<{ message: string }>(`/users/${id}`, {
     method: "DELETE",
   });
 }
 
-export function listProducts(token: string) {
-  return request<{ products: AdminProduct[] }>("/products?includeInactive=true", token, {
+export function listProducts() {
+  return request<{ products: AdminProduct[] }>("/products?includeInactive=true", {
     method: "GET",
   });
 }
 
-export function createProduct(token: string, payload: CreateProductPayload) {
-  return request<{ product: AdminProduct; message: string }>("/products", token, {
+export function createProduct(payload: CreateProductPayload) {
+  return request<{ product: AdminProduct; message: string }>("/products", {
     method: "POST",
     body: JSON.stringify(payload),
   });
 }
 
-export function updateProduct(
-  token: string,
-  id: number,
-  payload: UpdateProductPayload
-) {
-  return request<{ product: AdminProduct; message: string }>(
-    `/products/${id}`,
-    token,
-    {
-      method: "PATCH",
-      body: JSON.stringify(payload),
-    }
-  );
+export function updateProduct(id: number, payload: UpdateProductPayload) {
+  return request<{ product: AdminProduct; message: string }>(`/products/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
 }
 
-export function deleteProduct(token: string, id: number) {
-  return request<{ message: string }>(`/products/${id}`, token, {
+export function deleteProduct(id: number) {
+  return request<{ message: string }>(`/products/${id}`, {
     method: "DELETE",
   });
 }
 
-export function listCatalogs(token: string) {
+export function listCatalogs() {
   return request<{
     brands: BrandOption[];
     classifications: ClassificationOption[];
-  }>("/catalogs", token, { method: "GET" });
+  }>("/catalogs", { method: "GET" });
 }
 
-export function createBrand(token: string, payload: CreateCatalogOptionPayload) {
-  return request<{ brand: BrandOption; message: string }>(
-    "/catalogs/brands",
-    token,
-    {
-      method: "POST",
-      body: JSON.stringify(payload),
-    }
-  );
+export function createBrand(payload: CreateCatalogOptionPayload) {
+  return request<{ brand: BrandOption; message: string }>("/catalogs/brands", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
-export function updateBrand(
-  token: string,
-  id: number,
-  payload: CreateCatalogOptionPayload
-) {
-  return request<{ brand: BrandOption; message: string }>(
-    `/catalogs/brands/${id}`,
-    token,
-    {
-      method: "PATCH",
-      body: JSON.stringify(payload),
-    }
-  );
+export function updateBrand(id: number, payload: CreateCatalogOptionPayload) {
+  return request<{ brand: BrandOption; message: string }>(`/catalogs/brands/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
 }
 
-export function deleteBrand(token: string, id: number) {
-  return request<{ message: string }>(`/catalogs/brands/${id}`, token, {
+export function deleteBrand(id: number) {
+  return request<{ message: string }>(`/catalogs/brands/${id}`, {
     method: "DELETE",
   });
 }
 
-export function createClassification(
-  token: string,
-  payload: CreateCatalogOptionPayload
-) {
+export function createClassification(payload: CreateCatalogOptionPayload) {
   return request<{ classification: ClassificationOption; message: string }>(
     "/catalogs/classifications",
-    token,
     {
       method: "POST",
       body: JSON.stringify(payload),
@@ -419,14 +384,9 @@ export function createClassification(
   );
 }
 
-export function updateClassification(
-  token: string,
-  id: number,
-  payload: CreateCatalogOptionPayload
-) {
+export function updateClassification(id: number, payload: CreateCatalogOptionPayload) {
   return request<{ classification: ClassificationOption; message: string }>(
     `/catalogs/classifications/${id}`,
-    token,
     {
       method: "PATCH",
       body: JSON.stringify(payload),
@@ -434,71 +394,55 @@ export function updateClassification(
   );
 }
 
-export function deleteClassification(token: string, id: number) {
-  return request<{ message: string }>(`/catalogs/classifications/${id}`, token, {
+export function deleteClassification(id: number) {
+  return request<{ message: string }>(`/catalogs/classifications/${id}`, {
     method: "DELETE",
   });
 }
 
-export function listSuppliers(token: string) {
-  return request<{ suppliers: SupplierOption[] }>("/suppliers", token, {
+export function listSuppliers() {
+  return request<{ suppliers: SupplierOption[] }>("/suppliers", {
     method: "GET",
   });
 }
 
-export function createSupplier(token: string, payload: CreateSupplierPayload) {
-  return request<{ supplier: SupplierOption; message: string }>(
-    "/suppliers",
-    token,
-    {
-      method: "POST",
-      body: JSON.stringify(payload),
-    }
-  );
+export function createSupplier(payload: CreateSupplierPayload) {
+  return request<{ supplier: SupplierOption; message: string }>("/suppliers", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
-export function listPromotions(token: string) {
-  return request<{ promotions: AdminPromotion[] }>(
-    "/promotions?includeExpired=true",
-    token,
-    {
-      method: "GET",
-    }
-  );
+export function listPromotions() {
+  return request<{ promotions: AdminPromotion[] }>("/promotions?includeExpired=true", {
+    method: "GET",
+  });
 }
 
-export function createPromotion(token: string, payload: CreatePromotionPayload) {
-  return request<{ promotions: AdminPromotion[]; message: string }>(
-    "/promotions",
-    token,
-    {
-      method: "POST",
-      body: JSON.stringify(payload),
-    }
-  );
+export function createPromotion(payload: CreatePromotionPayload) {
+  return request<{ promotions: AdminPromotion[]; message: string }>("/promotions", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
-export function deletePromotion(token: string, id: number) {
-  return request<{ message: string }>(`/promotions/${id}`, token, {
+export function deletePromotion(id: number) {
+  return request<{ message: string }>(`/promotions/${id}`, {
     method: "DELETE",
   });
 }
 
-export function updatePromotion(token: string, id: number, payload: UpdatePromotionPayload) {
-  return request<{ promotion: AdminPromotion; message: string }>(
-    `/promotions/${id}`,
-    token,
-    {
-      method: "PATCH",
-      body: JSON.stringify(payload),
-    }
-  );
+export function updatePromotion(id: number, payload: UpdatePromotionPayload) {
+  return request<{ promotion: AdminPromotion; message: string }>(`/promotions/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
 }
 
-export function listAdminReviews(
-  token: string,
-  params?: { status?: ReviewStatus | "ALL"; userId?: number }
-) {
+export function listAdminReviews(params?: {
+  status?: ReviewStatus | "ALL";
+  userId?: number;
+}) {
   const search = new URLSearchParams();
 
   if (params?.status && params.status !== "ALL") {
@@ -513,35 +457,28 @@ export function listAdminReviews(
 
   return request<{ reviews: AdminReview[] }>(
     `/reviews/admin${query ? `?${query}` : ""}`,
-    token,
     {
       method: "GET",
     }
   );
 }
 
-export function approveReview(token: string, id: number) {
-  return request<{ review: AdminReview; message: string }>(
-    `/reviews/${id}/approve`,
-    token,
-    {
-      method: "PATCH",
-    }
-  );
+export function approveReview(id: number) {
+  return request<{ review: AdminReview; message: string }>(`/reviews/${id}/approve`, {
+    method: "PATCH",
+  });
 }
 
-export function deleteReview(token: string, id: number) {
-  return request<{ message: string }>(`/reviews/${id}`, token, {
+export function deleteReview(id: number) {
+  return request<{ message: string }>(`/reviews/${id}`, {
     method: "DELETE",
   });
 }
 
-export async function downloadDatabaseBackup(token: string) {
+export async function downloadDatabaseBackup() {
   const response = await fetch(`${API_URL}/backups/database`, {
     method: "GET",
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
+    credentials: "include",
   });
 
   if (!response.ok) {
@@ -567,53 +504,44 @@ export async function downloadDatabaseBackup(token: string) {
   return { blob, fileName };
 }
 
-export function listDatabaseBackups(token: string) {
-  return request<{ backups: DatabaseBackupRecord[] }>(
-    "/backups/database/history",
-    token,
-    {
-      method: "GET",
-    }
-  );
+export function listDatabaseBackups() {
+  return request<{ backups: DatabaseBackupRecord[] }>("/backups/database/history", {
+    method: "GET",
+  });
 }
 
-export function createDatabaseBackupRecord(token: string) {
+export function createDatabaseBackupRecord() {
   return request<{
     backup: DatabaseBackupRecord;
     message: string;
-  }>("/backups/database", token, {
+  }>("/backups/database", {
     method: "POST",
   });
 }
 
-export function createSingleTableDatabaseBackupRecord(
-  token: string,
-  tableName: string,
-) {
+export function createSingleTableDatabaseBackupRecord(tableName: string) {
   return request<{
     backup: DatabaseBackupRecord;
     message: string;
-  }>("/backups/database/table", token, {
+  }>("/backups/database/table", {
     method: "POST",
     body: JSON.stringify({ tableName }),
   });
 }
 
-export function deleteDatabaseBackupRecord(token: string, id: number) {
+export function deleteDatabaseBackupRecord(id: number) {
   return request<{
     backup: DatabaseBackupRecord;
     message: string;
-  }>(`/backups/database/${id}`, token, {
+  }>(`/backups/database/${id}`, {
     method: "DELETE",
   });
 }
 
-export async function downloadDatabaseBackupById(token: string, id: number) {
+export async function downloadDatabaseBackupById(id: number) {
   const response = await fetch(`${API_URL}/backups/database/${id}/download`, {
     method: "GET",
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
+    credentials: "include",
   });
 
   if (!response.ok) {
@@ -639,71 +567,56 @@ export async function downloadDatabaseBackupById(token: string, id: number) {
   return { blob, fileName };
 }
 
-export function getDatabaseStatus(token: string) {
-  return request<{ status: DatabaseStatus }>("/backups/database/status", token, {
+export function getDatabaseStatus() {
+  return request<{ status: DatabaseStatus }>("/backups/database/status", {
     method: "GET",
   });
 }
 
-export function getAuthSecurityOverview(token: string) {
-  return request<{ overview: AuthSecurityOverview }>("/auth/security-overview", token, {
+export function getAuthSecurityOverview() {
+  return request<{ overview: AuthSecurityOverview }>("/auth/security-overview", {
     method: "GET",
   });
 }
 
-export function getDatabaseBackupSchedule(token: string) {
-  return request<{ schedule: DatabaseBackupSchedule }>(
-    "/backups/database/schedule",
-    token,
-    {
-      method: "GET",
-    }
-  );
+export function getDatabaseBackupSchedule() {
+  return request<{ schedule: DatabaseBackupSchedule }>("/backups/database/schedule", {
+    method: "GET",
+  });
 }
 
-export function deleteDatabaseBackupSchedule(token: string) {
+export function deleteDatabaseBackupSchedule() {
   return request<{
     schedule: DatabaseBackupSchedule;
     message: string;
-  }>("/backups/database/schedule", token, {
+  }>("/backups/database/schedule", {
     method: "DELETE",
   });
 }
 
-export function updateSupplier(
-  token: string,
-  id: number,
-  payload: UpdateSupplierPayload
-) {
-  return request<{ supplier: SupplierOption; message: string }>(
-    `/suppliers/${id}`,
-    token,
-    {
-      method: "PATCH",
-      body: JSON.stringify(payload),
-    }
-  );
+export function updateSupplier(id: number, payload: UpdateSupplierPayload) {
+  return request<{ supplier: SupplierOption; message: string }>(`/suppliers/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
 }
 
-export function deleteSupplier(token: string, id: number) {
-  return request<{ message: string }>(`/suppliers/${id}`, token, {
+export function deleteSupplier(id: number) {
+  return request<{ message: string }>(`/suppliers/${id}`, {
     method: "DELETE",
   });
 }
 
-export function updateDatabaseBackupSchedule(
-  token: string,
-  payload: {
-    enabled: boolean;
-    everyDays: number;
-    runAtTime: string;
-    retentionDays: number;
-  }
-) {
+export function updateDatabaseBackupSchedule(payload: {
+  enabled: boolean;
+  everyDays: number;
+  runAtTime: string;
+  retentionDays: number;
+}) {
   return request<{
     schedule: DatabaseBackupSchedule;
     message: string;
-  }>("/backups/database/schedule", token, {
+  }>("/backups/database/schedule", {
     method: "PUT",
     body: JSON.stringify(payload),
   });

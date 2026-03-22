@@ -15,7 +15,7 @@ type User = {
 type AuthContextType = {
   user: User | null;
   loading: boolean;
-  login: (payload: { user: User; token: string }) => void;
+  login: (payload: { user: User }) => void;
   updateUser: (user: User) => void;
   logout: () => void;
 };
@@ -49,8 +49,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
-  const login = ({ user, token }: { user: User; token: string }) => {
-    localStorage.setItem("token", token);
+  const login = ({ user }: { user: User }) => {
     localStorage.setItem("user", JSON.stringify(user));
     setUser(user); // <- clave para refrescar header inmediatamente
   };
@@ -61,7 +60,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = () => {
-    localStorage.removeItem("token");
     localStorage.removeItem("user");
     setUser(null);
   };

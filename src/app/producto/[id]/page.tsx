@@ -140,14 +140,8 @@ export default function ProductDetailPage() {
       return;
     }
 
-    const token = localStorage.getItem("token");
-    if (!token) {
-      setMyReview(null);
-      return;
-    }
-
     try {
-      const result = await getMyProductReview(token, productId);
+      const result = await getMyProductReview(productId);
       setMyReview(result.review);
     } catch {
       setMyReview(null);
@@ -204,8 +198,7 @@ export default function ProductDetailPage() {
 
     if (!productId) return;
 
-    const token = localStorage.getItem("token");
-    if (!token || !user) {
+    if (!user) {
       setReviewNotice({
         type: "error",
         text: "Debes iniciar sesion para enviar una reseña.",
@@ -229,7 +222,7 @@ export default function ProductDetailPage() {
 
     try {
       setSavingReview(true);
-      const result = await createProductReview(token, {
+      const result = await createProductReview({
         productId,
         rating: canEditReview ? existingReview?.rating ?? reviewForm.rating : reviewForm.rating,
         comment,
