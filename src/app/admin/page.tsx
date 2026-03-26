@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
@@ -62,7 +63,15 @@ import {
 import { logoutUser } from "@/services/auth";
 import { ConfirmDialog } from "@/components/feedback";
 import { updateMyProfile } from "@/services/users";
-import styles from "./admin.module.css";
+import "./admin.css";
+
+const styles = new Proxy(
+  {},
+  {
+    get: (_, property) =>
+      typeof property === "string" ? `admin-${property}` : "",
+  },
+) as Record<string, string>;
 
 type Section =
   | "overview"
@@ -94,12 +103,12 @@ const PRODUCT_CSV_COLUMNS = [
   { key: "nombre", label: "Nombre", required: true },
   { key: "marca", label: "Marca", required: true },
   { key: "modelo", label: "Modelo", required: true },
-  { key: "descripcion", label: "Descripcion", required: true },
+  { key: "descripcion", label: "Descripción", required: true },
   { key: "precio", label: "Precio", required: true },
-  { key: "clasificacion", label: "Clasificacion", required: true },
+  { key: "clasificacion", label: "Clasificación", required: true },
   { key: "stock", label: "Stock", required: true },
   { key: "proveedor", label: "Proveedor", required: true },
-  { key: "tipoAdquisicion", label: "TipoAdquisicion", required: true },
+  { key: "tipoAdquisicion", label: "TipoAdquisición", required: true },
   { key: "requiereReceta", label: "RequiereReceta", required: false },
   { key: "activo", label: "Activo", required: false },
 ] as const;
@@ -189,7 +198,7 @@ const PRODUCT_CSV_REQUIRED_COLUMN_KEYS: ProductCsvColumnKey[] = PRODUCT_CSV_COLU
 
 const PRODUCT_CSV_TEMPLATE_SAMPLE_ROWS: ProductCsvTemplateRow[] = [
   {
-    nombre: "Silla de ruedas estandar",
+    nombre: "Silla de ruedas estándar",
     marca: "Drive",
     modelo: "SR-001",
     descripcion: "Silla de ruedas plegable de acero para uso diario.",
@@ -202,12 +211,12 @@ const PRODUCT_CSV_TEMPLATE_SAMPLE_ROWS: ProductCsvTemplateRow[] = [
     activo: "True",
   },
   {
-    nombre: "Tanque oxigeno 680L",
+    nombre: "Tanque oxígeno 680L",
     marca: "Infra",
     modelo: "TO-680L",
-    descripcion: "Tanque de oxigeno portatil para renta o venta.",
+    descripcion: "Tanque de oxígeno portátil para renta o venta.",
     precio: "7100",
-    clasificacion: "Equipo Medico",
+    clasificacion: "Equipo Médico",
     stock: "5",
     proveedor: "Infra",
     tipoAdquisicion: "RENTA",
@@ -297,27 +306,27 @@ function validateUserPayload(form: typeof defaultUserForm, editing: boolean) {
   const direccion = form.direccion.trim();
 
   if (nombre.length < 2 || nombre.length > 120 || !NAME_REGEX.test(nombre)) {
-    return "Nombre invalido. Usa solo letras y minimo 2 caracteres.";
+    return "Nombre inválido. Usa solo letras y mínimo 2 caracteres.";
   }
 
   if (!EMAIL_REGEX.test(correo) || correo.length > 120) {
-    return "Correo invalido.";
+    return "Correo inválido.";
   }
 
   if (!editing && !PASSWORD_REGEX.test(password)) {
-    return "Password invalido. Minimo 6, con letras y numeros.";
+    return "Password inválido. Mínimo 6, con letras y números.";
   }
 
   if (editing && password && !PASSWORD_REGEX.test(password)) {
-    return "El nuevo password debe tener minimo 6, con letras y numeros.";
+    return "El nuevo password debe tener mínimo 6, con letras y números.";
   }
 
   if (telefono && !PHONE_REGEX.test(telefono)) {
-    return "Telefono invalido.";
+      return "Teléfono inválido.";
   }
 
   if (direccion && (direccion.length < 5 || direccion.length > 180)) {
-    return "Direccion invalida. Entre 5 y 180 caracteres.";
+      return "Dirección inválida. Entre 5 y 180 caracteres.";
   }
 
   return null;
@@ -330,15 +339,15 @@ function validateProductPayload(form: typeof defaultProductForm) {
   const stockRaw = form.stock.trim();
 
   if (nombre.length < 2 || nombre.length > 120) {
-    return "Nombre de producto invalido.";
+    return "Nombre de producto inválido.";
   }
 
   if (!form.marca.trim() || !form.modelo.trim() || !form.clasificacion.trim() || !form.proveedor.trim()) {
-    return "Selecciona marca, modelo, clasificacion y proveedor.";
+    return "Selecciona marca, modelo, clasificación y proveedor.";
   }
 
   if (descripcion.length < 5 || descripcion.length > 400) {
-    return "Descripcion invalida. Entre 5 y 400 caracteres.";
+    return "Descripción inválida. Entre 5 y 400 caracteres.";
   }
 
   if (precioRaw === "" || stockRaw === "") {
@@ -349,11 +358,11 @@ function validateProductPayload(form: typeof defaultProductForm) {
   const stock = Number(stockRaw);
 
   if (!Number.isFinite(precio) || precio < 0) {
-    return "Precio invalido. Puede ser 0 o mayor.";
+    return "Precio inválido. Puede ser 0 o mayor.";
   }
 
   if (!Number.isInteger(stock) || stock < 0) {
-    return "Stock invalido. Debe ser entero 0 o mayor.";
+    return "Stock inválido. Debe ser entero 0 o mayor.";
   }
 
   return null;
@@ -375,19 +384,19 @@ function validateSupplierPayload(form: typeof defaultSupplierForm) {
   const direccion = form.direccion.trim();
 
   if (nombre.length < 2 || nombre.length > 120) {
-    return "Nombre de proveedor invalido.";
+    return "Nombre de proveedor inválido.";
   }
 
   if (encargado.length < 2 || encargado.length > 120) {
-    return "Nombre de encargado invalido.";
+    return "Nombre de encargado inválido.";
   }
 
   if (repartidor.length < 2 || repartidor.length > 120) {
-    return "Nombre de repartidor invalido.";
+    return "Nombre de repartidor inválido.";
   }
 
   if (direccion.length < 5 || direccion.length > 180) {
-    return "Direccion invalida. Entre 5 y 180 caracteres.";
+    return "Dirección inválida. Entre 5 y 180 caracteres.";
   }
 
   return null;
@@ -397,13 +406,13 @@ function validatePromotionPayload(form: typeof defaultPromotionForm) {
   if (form.mode === "PRODUCT") {
     const productId = Number(form.productId);
     if (!Number.isInteger(productId) || productId <= 0) {
-      return "Selecciona un producto para la promocion.";
+    return "Selecciona un producto para la promoción.";
     }
   }
 
   if (form.mode === "CATEGORY") {
     if (!form.clasificacion.trim()) {
-      return "Selecciona una clasificacion para aplicar promociones.";
+      return "Selecciona una clasificación para aplicar promociones.";
     }
   }
 
@@ -413,13 +422,13 @@ function validatePromotionPayload(form: typeof defaultPromotionForm) {
 
   const descripcion = form.descripcion.trim();
   if (descripcion.length < 5 || descripcion.length > 240) {
-    return "Descripcion de promocion invalida. Entre 5 y 240 caracteres.";
+      return "Descripción de promoción inválida. Entre 5 y 240 caracteres.";
   }
 
   const startAt = new Date(form.startAt);
   const endAt = new Date(form.endAt);
   if (Number.isNaN(startAt.getTime()) || Number.isNaN(endAt.getTime())) {
-    return "Fechas de promocion invalidas.";
+      return "Fechas de promoción inválidas.";
   }
 
   if (startAt >= endAt) {
@@ -449,19 +458,19 @@ function validateProfilePayload(form: {
   const confirmPassword = form.confirmPassword.trim();
 
   if (nombre.length < 2 || nombre.length > 120 || !NAME_REGEX.test(nombre)) {
-    return "Nombre invalido. Usa solo letras y minimo 2 caracteres.";
+    return "Nombre inválido. Usa solo letras y mínimo 2 caracteres.";
   }
 
   if (!EMAIL_REGEX.test(correo) || correo.length > 120) {
-    return "Correo invalido.";
+    return "Correo inválido.";
   }
 
   if (telefono && !PHONE_REGEX.test(telefono)) {
-    return "Telefono invalido.";
+      return "Teléfono inválido.";
   }
 
   if (direccion && (direccion.length < 5 || direccion.length > 180)) {
-    return "Direccion invalida. Entre 5 y 180 caracteres.";
+      return "Dirección inválida. Entre 5 y 180 caracteres.";
   }
 
   if (password || confirmPassword) {
@@ -978,17 +987,17 @@ function createProductImportPreview(
     const tipoAdquisicion = normalizeProductMode(tipoAdquisicionRaw);
     if (!tipoAdquisicion) {
       validationError =
-        "Tipo de adquisicion invalido. Usa VENTA, RENTA o MIXTO.";
+              "Tipo de adquisición inválido. Usa VENTA, RENTA o MIXTO.";
     }
 
     const requiereReceta = normalizeBooleanCell(requiereRecetaRaw, false);
     if (requiereReceta === null && !validationError) {
-      validationError = "Valor invalido en requiereReceta. Usa true o false.";
+            validationError = "Valor inválido en requiereReceta. Usa true o false.";
     }
 
     const activo = normalizeBooleanCell(activoRaw, true);
     if (activo === null && !validationError) {
-      validationError = "Valor invalido en activo. Usa true o false.";
+            validationError = "Valor inválido en activo. Usa true o false.";
     }
 
     const formCandidate = {
@@ -2517,7 +2526,7 @@ export default function AdminDashboardPage() {
         type: "success",
         text:
           ids.length === 1
-            ? "Clasificacion eliminada."
+                                  ? "Clasificación eliminada."
             : `${ids.length} clasificaciones eliminadas.`,
       });
     } catch (error) {
@@ -2683,7 +2692,7 @@ export default function AdminDashboardPage() {
 
     const validationError = validateCatalogName(
       catalogForm.clasificacion,
-      "Clasificacion",
+                              "Clasificación",
     );
     if (validationError) {
       setNotice({ type: "error", text: validationError });
@@ -2705,7 +2714,7 @@ export default function AdminDashboardPage() {
         );
         setSelectedClassificationIds([result.classification.id]);
         resetClassificationEditor();
-        setNotice({ type: "success", text: "Clasificacion actualizada." });
+            setNotice({ type: "success", text: "Clasificación actualizada." });
       } else {
         const result = await createClassification( {
           nombre: catalogForm.clasificacion.trim(),
@@ -2715,13 +2724,13 @@ export default function AdminDashboardPage() {
         );
         setClassificationPage(1);
         setCatalogForm((prev) => ({ ...prev, clasificacion: "" }));
-        setNotice({ type: "success", text: "Clasificacion creada." });
+            setNotice({ type: "success", text: "Clasificación creada." });
       }
     } catch (error) {
       const message =
         error instanceof Error
           ? error.message
-          : "No se pudo guardar la clasificacion";
+                    : "No se pudo guardar la clasificación";
       if (!handleSessionError(message)) {
         setNotice({ type: "error", text: message });
       }
@@ -2851,7 +2860,7 @@ export default function AdminDashboardPage() {
       resetPromotionForm();
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "No se pudo guardar la promocion";
+      error instanceof Error ? error.message : "No se pudo guardar la promoción";
       if (!handleSessionError(message)) {
         setNotice({ type: "error", text: message });
       }
@@ -2884,10 +2893,10 @@ export default function AdminDashboardPage() {
       if (editingPromotionId === id) {
         resetPromotionForm();
       }
-      setNotice({ type: "success", text: "Promocion eliminada." });
+                setNotice({ type: "success", text: "Promoción eliminada." });
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "No se pudo eliminar la promocion";
+      error instanceof Error ? error.message : "No se pudo eliminar la promoción";
       if (!handleSessionError(message)) {
         setNotice({ type: "error", text: message });
       }
@@ -3184,15 +3193,15 @@ export default function AdminDashboardPage() {
       loadAuthSecurityData(),
     ]);
   };
-
+  
   const performLogout = useCallback(async () => {
     try {
       await logoutUser();
     } catch {
-      // Si la sesion ya no es valida, igual limpiamos el estado local.
+      // Si la sesión ya no es válida, igual limpiamos el estado local.
     } finally {
       logout();
-      toast.success("Sesion cerrada correctamente");
+      toast.success("Sesión cerrada correctamente");
       router.push("/login");
     }
   }, [logout, router]);
@@ -3205,7 +3214,7 @@ export default function AdminDashboardPage() {
     <div className={styles.shell}>
       <aside className={styles.sidebar}>
         <div className={styles.brand}>
-          <img src="/logo001.png" alt="CEMYDI" />
+          <Image src="/logo001.png" alt="CEMYDI" width={50} height={50} />
           <span>Panel Admin</span>
         </div>
 
@@ -3287,7 +3296,7 @@ export default function AdminDashboardPage() {
           type="button"
           onClick={() => void performLogout()}
         >
-          Cerrar sesion
+          Cerrar sesión
         </button>
       </aside>
 
@@ -3295,7 +3304,7 @@ export default function AdminDashboardPage() {
         <header className={styles.topbar}>
           <div>
             <h1>Bienvenido, {user?.nombre ?? "Administrador"}</h1>
-            <p>Control de usuarios, productos, catalogos, proveedores y promociones.</p>
+            <p>Control de usuarios, productos, catálogos, proveedores y promociones.</p>
           </div>
         </header>
 
@@ -3366,13 +3375,13 @@ export default function AdminDashboardPage() {
                 />
                 <input
                   name="telefono"
-                  placeholder="Telefono"
+                  placeholder="Teléfono"
                   value={userForm.telefono}
                   onChange={onUserInput}
                 />
                 <input
                   name="direccion"
-                  placeholder="Direccion"
+                  placeholder="Dirección"
                   value={userForm.direccion}
                   onChange={onUserInput}
                 />
@@ -3445,7 +3454,7 @@ export default function AdminDashboardPage() {
                     <th>Nombre</th>
                     <th>Correo</th>
                     <th>Rol</th>
-                    <th>Telefono</th>
+                    <th>Teléfono</th>
                     <th>Estado</th>
                     <th>Acciones</th>
                   </tr>
@@ -3524,7 +3533,7 @@ export default function AdminDashboardPage() {
                 Anterior
               </button>
               <span>
-                Pagina {userPage} de {totalUserPages}
+                Página {userPage} de {totalUserPages}
               </span>
               <button
                 type="button"
@@ -3585,7 +3594,7 @@ export default function AdminDashboardPage() {
                 />
                 <textarea
                   name="descripcion"
-                  placeholder="Descripcion"
+                        placeholder="Descripción"
                   value={productForm.descripcion}
                   onChange={onProductInput}
                 />
@@ -3611,7 +3620,7 @@ export default function AdminDashboardPage() {
                   value={productForm.clasificacion}
                   onChange={onProductInput}
                 >
-                  <option value="">Selecciona clasificacion</option>
+                  <option value="">Selecciona clasificación</option>
                   {productOptions.clasificacion.map((option) => (
                     <option key={option} value={option}>
                       {option}
@@ -3822,7 +3831,7 @@ export default function AdminDashboardPage() {
                 Anterior
               </button>
               <span>
-                Pagina {productPage} de {totalProductPages}
+                Página {productPage} de {totalProductPages}
               </span>
               <button
                 type="button"
@@ -4118,7 +4127,7 @@ export default function AdminDashboardPage() {
                       </label>
 
                       <label className={styles.exportFilterField}>
-                        <span>Tipo de adquisicion</span>
+                        <span>Tipo de adquisición</span>
                         <select
                           value={productExportFilters.mode}
                           onChange={(e) =>
@@ -4347,7 +4356,7 @@ export default function AdminDashboardPage() {
                         <div className={styles.templateFeatureList}>
                           <span>Encabezados estandarizados para importar sin ajustes.</span>
                           <span>Ideal si quieres compartir la plantilla con el equipo completo.</span>
-                          <span>Incluye campos de receta, estado y tipo de adquisicion.</span>
+                          <span>Incluye campos de receta, estado y tipo de adquisición.</span>
                         </div>
                       </div>
 
@@ -4549,7 +4558,7 @@ export default function AdminDashboardPage() {
         {section === "catalogs" ? (
           <section className={styles.section}>
             <div className={styles.sectionHeader}>
-              <h2>Catalogos para productos</h2>
+              <h2>Catálogos para productos</h2>
               <p className={styles.pendingCounter}>
                 Registros: <strong>{formatNumber(brands.length + classifications.length)}</strong>
               </p>
@@ -4629,8 +4638,8 @@ export default function AdminDashboardPage() {
                           requestConfirmation({
                             title:
                               selectedBrandIds.length === 1
-                                ? "Confirmar eliminacion de marca"
-                                : "Confirmar eliminacion de marcas",
+                          ? "Confirmar eliminación de marca"
+                          : "Confirmar eliminación de marcas",
                             description: `Se eliminaran ${selectedBrandIds.length} marca${
                               selectedBrandIds.length === 1 ? "" : "s"
                             }: ${describeSelectedCatalogItems(brands, selectedBrandIds)}.`,
@@ -4672,7 +4681,7 @@ export default function AdminDashboardPage() {
                           <tr>
                             <td className={styles.emptyCell} colSpan={2}>
                               {filteredBrands.length === 0 && brandSearch.trim()
-                                ? "No hay marcas que coincidan con la busqueda."
+                        ? "No hay marcas que coincidan con la búsqueda."
                                 : "Sin marcas registradas."}
                             </td>
                           </tr>
@@ -4730,8 +4739,8 @@ export default function AdminDashboardPage() {
                       name="clasificacion"
                       placeholder={
                         editingClassificationId
-                          ? "Editar nombre de la clasificacion"
-                          : "Nombre de la clasificacion"
+                          ? "Editar nombre de la clasificación"
+                          : "Nombre de la clasificación"
                       }
                       value={catalogForm.clasificacion}
                       onChange={onCatalogInput}
@@ -4754,7 +4763,7 @@ export default function AdminDashboardPage() {
                     </svg>
                     <input
                       type="search"
-                      placeholder="Buscar clasificacion..."
+                      placeholder="Buscar clasificación..."
                       value={classificationSearch}
                       onChange={(e) => {
                         setClassificationSearch(e.target.value);
@@ -4766,8 +4775,8 @@ export default function AdminDashboardPage() {
                     <div className={styles.catalogToolbarMeta}>
                       <span className={styles.catalogSelectionCount}>
                         {selectedClassificationIds.length === 0
-                          ? "Ninguna clasificacion seleccionada"
-                          : `${formatNumber(selectedClassificationIds.length)} clasificacion${
+                          ? "Ninguna clasificación seleccionada"
+                          : `${formatNumber(selectedClassificationIds.length)} clasificación${
                               selectedClassificationIds.length === 1 ? "" : "es"
                             } seleccionada${
                               selectedClassificationIds.length === 1 ? "" : "s"
@@ -4806,9 +4815,9 @@ export default function AdminDashboardPage() {
                           requestConfirmation({
                             title:
                               selectedClassificationIds.length === 1
-                                ? "Confirmar eliminacion de clasificacion"
-                                : "Confirmar eliminacion de clasificaciones",
-                            description: `Se eliminaran ${selectedClassificationIds.length} clasificacion${
+                                ? "Confirmar eliminación de clasificación"
+                                : "Confirmar eliminación de clasificaciones",
+                            description: `Se eliminarán ${selectedClassificationIds.length} clasificación${
                               selectedClassificationIds.length === 1 ? "" : "es"
                             }: ${describeSelectedCatalogItems(
                               classifications,
@@ -4816,7 +4825,7 @@ export default function AdminDashboardPage() {
                             )}.`,
                             confirmLabel:
                               selectedClassificationIds.length === 1
-                                ? "Eliminar clasificacion"
+                                ? "Eliminar clasificación"
                                 : "Eliminar seleccionadas",
                             tone: "danger",
                             onConfirm: () =>
@@ -4849,7 +4858,7 @@ export default function AdminDashboardPage() {
                               disabled={paginatedClassifications.length === 0}
                             />
                           </th>
-                          <th>Clasificacion</th>
+                          <th>Clasificación</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -4858,7 +4867,7 @@ export default function AdminDashboardPage() {
                             <td className={styles.emptyCell} colSpan={2}>
                               {filteredClassifications.length === 0 &&
                               classificationSearch.trim()
-                                ? "No hay clasificaciones que coincidan con la busqueda."
+                                ? "No hay clasificaciones que coincidan con la búsqueda."
                                 : "Sin clasificaciones registradas."}
                             </td>
                           </tr>
@@ -4948,7 +4957,7 @@ export default function AdminDashboardPage() {
               />
               <input
                 name="direccion"
-                placeholder="Direccion"
+                placeholder="Dirección"
                 value={supplierForm.direccion}
                 onChange={onSupplierInput}
               />
@@ -5034,7 +5043,7 @@ export default function AdminDashboardPage() {
                     <th>Nombre</th>
                     <th>Encargado</th>
                     <th>Repartidor</th>
-                    <th>Direccion</th>
+                    <th>Dirección</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -5042,7 +5051,7 @@ export default function AdminDashboardPage() {
                     <tr>
                       <td colSpan={5} className={styles.emptyCell}>
                         {supplierSearch.trim()
-                          ? "No hay proveedores que coincidan con la busqueda."
+                          ? "No hay proveedores que coincidan con la búsqueda."
                           : "No hay proveedores registrados."}
                       </td>
                     </tr>
@@ -5080,8 +5089,8 @@ export default function AdminDashboardPage() {
                 onClick={() => setIsPromotionFormCollapsed((prev) => !prev)}
               >
                 {isPromotionFormCollapsed
-                  ? "Mostrar panel de promocion"
-                  : "Minimizar panel de promocion"}
+                  ? "Mostrar panel de promoción"
+                  : "Minimizar panel de promoción"}
               </button>
             </div>
 
@@ -5094,7 +5103,7 @@ export default function AdminDashboardPage() {
                   disabled={Boolean(editingPromotionId)}
                 >
                   <option value="PRODUCT">Aplicar a producto</option>
-                  <option value="CATEGORY">Aplicar por clasificacion</option>
+                  <option value="CATEGORY">Aplicar por clasificación</option>
                 </select>
                 <select
                   name="productId"
@@ -5115,7 +5124,7 @@ export default function AdminDashboardPage() {
                   onChange={onPromotionInput}
                   disabled={promotionForm.mode !== "CATEGORY"}
                 >
-                  <option value="">Selecciona clasificacion</option>
+                  <option value="">Selecciona clasificación</option>
                   {promotionClassificationOptions.map((item) => (
                     <option key={item} value={item}>
                       {item}
@@ -5142,7 +5151,7 @@ export default function AdminDashboardPage() {
                 />
                 <textarea
                   name="descripcion"
-                  placeholder="Descripcion de la promocion"
+                  placeholder="Descripción de la promoción"
                   value={promotionForm.descripcion}
                   onChange={onPromotionInput}
                 />
@@ -5157,7 +5166,7 @@ export default function AdminDashboardPage() {
                       ? "Guardando..."
                       : editingPromotionId
                         ? "Actualizar"
-                        : "Agregar promocion"}
+                        : "Agregar promoción"}
                   </button>
                   {editingPromotionId ? (
                     <button
@@ -5186,7 +5195,7 @@ export default function AdminDashboardPage() {
                   <tr>
                     <th>Producto</th>
                     <th>Categoria</th>
-                    <th>Descripcion</th>
+                    <th>Descripción</th>
                     <th>Periodo</th>
                     <th>Estado</th>
                     <th>Imagen</th>
@@ -5250,9 +5259,9 @@ export default function AdminDashboardPage() {
                               className={styles.danger}
                               onClick={() =>
                                 requestConfirmation({
-                                  title: "Confirmar eliminacion de promocion",
-                                  description: `Se eliminara la promocion del producto "${item.product.nombre}".`,
-                                  confirmLabel: "Eliminar promocion",
+                                  title: "Confirmar eliminación de promoción",
+                                  description: `Se eliminará la promoción del producto "${item.product.nombre}".`,
+                                  confirmLabel: "Eliminar promoción",
                                   tone: "danger",
                                   onConfirm: () => removePromotion(item.id),
                                 })
@@ -5278,7 +5287,7 @@ export default function AdminDashboardPage() {
                 Anterior
               </button>
               <span>
-                Pagina {promotionPage} de {totalPromotionPages}
+                Página {promotionPage} de {totalPromotionPages}
               </span>
               <button
                 type="button"
@@ -5335,7 +5344,7 @@ export default function AdminDashboardPage() {
                     <th>Fecha</th>
                     <th>Usuario</th>
                     <th>Producto</th>
-                    <th>Calificacion</th>
+                    <th>Calificación</th>
                     <th>Comentario</th>
                     <th>Estado</th>
                     <th>Moderado por</th>
@@ -5387,7 +5396,7 @@ export default function AdminDashboardPage() {
                             disabled={reviewActionId === item.id}
                             onClick={() =>
                               requestConfirmation({
-                                title: "Confirmar eliminacion de reseña",
+                    title: "Confirmar eliminación de reseña",
                                 description: `Se eliminara la reseña de "${item.user.nombre}" para "${item.product.nombre}".`,
                                 confirmLabel: "Eliminar reseña",
                                 tone: "danger",
@@ -5430,7 +5439,7 @@ export default function AdminDashboardPage() {
               />
               <input
                 name="telefono"
-                placeholder="Telefono"
+                placeholder="Teléfono"
                 value={profileForm.telefono}
                 onChange={(e) =>
                   setProfileForm((prev) => ({ ...prev, telefono: e.target.value }))
@@ -5438,7 +5447,7 @@ export default function AdminDashboardPage() {
               />
               <input
                 name="direccion"
-                placeholder="Direccion"
+                placeholder="Dirección"
                 value={profileForm.direccion}
                 onChange={(e) =>
                   setProfileForm((prev) => ({ ...prev, direccion: e.target.value }))
@@ -5682,7 +5691,7 @@ export default function AdminDashboardPage() {
                     <p className={styles.tableInsightsEmpty}>Cargando auditoria...</p>
                   ) : visibleLoginAuditItems.length === 0 ? (
                     <p className={styles.tableInsightsEmpty}>
-                      Sin eventos de inicio de sesion por el momento.
+                      Sin eventos de inicio de sesión por el momento.
                     </p>
                   ) : (
                     <div className={styles.auditList}>
@@ -5719,9 +5728,9 @@ export default function AdminDashboardPage() {
                   <span className={styles.backupEyebrow}>Respaldo y continuidad</span>
                   <h3>Generar respaldo de la base de datos</h3>
                   <p>
-                    Centraliza respaldos manuales y automaticos sin salir del panel. Todos los
+                    Centraliza respaldos manuales y automáticos sin salir del panel. Todos los
                     archivos se registran en historial y se guardan en Google Drive para mantener
-                    trazabilidad y recuperacion rapida.
+                    trazabilidad y recuperación rápida.
                   </p>
                 </div>
 
@@ -5822,7 +5831,7 @@ export default function AdminDashboardPage() {
                       }
                       disabled={savingBackupSchedule}
                     />
-                    <span>{backupScheduleForm.enabled ? "Automaticos activos" : "Solo manual"}</span>
+                <span>{backupScheduleForm.enabled ? "Automáticos activos" : "Solo manual"}</span>
                   </label>
                 </div>
 
@@ -5923,8 +5932,8 @@ export default function AdminDashboardPage() {
                     <div>
                       <h5>Registro actual de programacion</h5>
                       <p>
-                        Esta tabla siempre refleja la unica tarea programada disponible para los
-                        respaldos automaticos.
+                        Esta tabla siempre refleja la única tarea programada disponible para los
+                        respaldos automáticos.
                       </p>
                     </div>
                   </div>
@@ -5981,7 +5990,7 @@ export default function AdminDashboardPage() {
                                 requestConfirmation({
                                   title: "Eliminar programacion automatica",
                                   description:
-                                    "Se restablecera la unica tarea programada a modo manual y podras crear una nueva configuracion cuando quieras.",
+            "Se restablecerá la única tarea programada a modo manual y podrás crear una nueva configuración cuando quieras.",
                                   confirmLabel: "Eliminar programacion",
                                   tone: "danger",
                                   onConfirm: () => removeBackupSchedule(),
@@ -6077,7 +6086,7 @@ export default function AdminDashboardPage() {
                               disabled={deletingBackupId === item.id}
                               onClick={() =>
                                 requestConfirmation({
-                                  title: "Confirmar eliminacion de respaldo",
+                    title: "Confirmar eliminación de respaldo",
                                   description: `Se eliminara el archivo "${item.fileName}" de Google Drive y tambien su registro del historial.`,
                                   confirmLabel: "Eliminar respaldo",
                                   tone: "danger",
@@ -6104,7 +6113,7 @@ export default function AdminDashboardPage() {
                   Anterior
                 </button>
                 <span>
-                  Pagina {backupPage} de {totalBackupPages}
+                  Página {backupPage} de {totalBackupPages}
                 </span>
                 <button
                   type="button"

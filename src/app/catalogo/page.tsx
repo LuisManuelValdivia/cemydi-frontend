@@ -4,12 +4,11 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CatalogProduct, getCatalogProducts } from "@/services/catalog";
-import styles from "./catalogo.module.css";
 
 const PAGE_SIZE = 9;
 const fallbackClassifications = [
   "Movilidad",
-  "Rehabilitacion",
+  "Rehabilitación",
   "Soporte",
   "Terapia",
 ];
@@ -142,7 +141,7 @@ function CatalogoPageContent() {
         setAvailableClassifications(merged);
       } catch (err) {
         const message =
-          err instanceof Error ? err.message : "No se pudo cargar el catalogo.";
+          err instanceof Error ? err.message : "No se pudo cargar el catálogo.";
         setError(message);
       } finally {
         setLoading(false);
@@ -219,117 +218,143 @@ function CatalogoPageContent() {
   };
 
   return (
-    <div className={styles.page}>
-      <div className={styles.layout}>
-        <aside className={styles.filtersCard}>
-          <h2>Filtros</h2>
+    <div className="px-4 py-5">
+      <div className="mx-auto grid max-w-[1280px] gap-4 lg:grid-cols-[290px_1fr]">
+        <aside className="rounded-[22px] border border-[#dbe4e6] bg-white p-4 lg:sticky lg:top-24 lg:h-fit">
+          <h2 className="m-0 text-[1.75rem] text-[#132437]">Filtros</h2>
 
-          <div className={styles.filterGroup}>
-            <h3>CATEGORIA</h3>
+          <div className="mt-4 grid gap-3 border-t border-[#ecf1f2] pt-[14px]">
+            <h3 className="m-0 text-[1.3rem] tracking-[0.02em] text-[#1f2d3a]">CATEGORÍA</h3>
             {availableClassifications.map((item) => (
-              <label key={item} className={styles.checkLabel}>
+              <label key={item} className="flex items-center gap-2.5 font-semibold text-[#415462]">
                 <input
                   type="checkbox"
                   checked={draftClassifications.includes(item)}
                   onChange={() => toggleClassification(item)}
+                  className="size-5 rounded-md"
                 />
                 <span>{item}</span>
               </label>
             ))}
           </div>
 
-          <div className={styles.filterGroup}>
-            <h3>TIPO DE ADQUISICION</h3>
+          <div className="mt-3 grid gap-2.5 border-t border-[#ecf1f2] pt-[14px]">
+            <h3 className="m-0 text-[1.3rem] tracking-[0.02em] text-[#1f2d3a]">TIPO DE ADQUISICIÓN</h3>
             {tipoOptions.map((option) => (
-              <label key={option.value} className={styles.checkLabel}>
+              <label key={option.value} className="flex items-center gap-2.5 font-semibold text-[#415462]">
                 <input
                   type="checkbox"
                   checked={draftTipos.includes(option.value)}
                   onChange={() => toggleTipo(option.value)}
+                  className="size-5 rounded-md"
                 />
                 <span>{option.label}</span>
               </label>
             ))}
           </div>
 
-          <div className={styles.filterGroup}>
-            <h3>CONDICIONES</h3>
-            <label className={styles.checkLabel}>
+          <div className="mt-3 grid gap-2.5 border-t border-[#ecf1f2] pt-[14px]">
+            <h3 className="m-0 text-[1.3rem] tracking-[0.02em] text-[#1f2d3a]">CONDICIONES</h3>
+            <label className="flex items-center gap-2.5 font-semibold text-[#415462]">
               <input
                 type="checkbox"
                 checked={draftReceta === "sin"}
                 onChange={() =>
                   setDraftReceta((prev) => (prev === "sin" ? null : "sin"))
                 }
+                className="size-5 rounded-md"
               />
               <span>Solo sin receta</span>
             </label>
-            <label className={styles.checkLabel}>
+            <label className="flex items-center gap-2.5 font-semibold text-[#415462]">
               <input
                 type="checkbox"
                 checked={draftReceta === "con"}
                 onChange={() =>
                   setDraftReceta((prev) => (prev === "con" ? null : "con"))
                 }
+                className="size-5 rounded-md"
               />
               <span>Solo con receta</span>
             </label>
           </div>
 
-          <button type="button" className={styles.applyBtn} onClick={applyFilters}>
+          <button
+            type="button"
+            className="mt-4 w-full rounded-[14px] bg-[#1f6a67] px-4 py-3 text-[1.05rem] font-bold text-white"
+            onClick={applyFilters}
+          >
             Aplicar filtros
           </button>
         </aside>
 
-        <section className={styles.catalogSection}>
-          <header className={styles.catalogHeader}>
-            <h1>Catalogo completo</h1>
-            <p>
+        <section className="grid min-w-0 gap-4">
+          <header className="rounded-[22px] border border-[#dbe4e6] bg-white px-[22px] py-5">
+            <h1 className="m-0 text-[2.1rem] text-[#132437] max-[760px]:text-[1.7rem]">
+              Catálogo completo
+            </h1>
+            <p className="mt-2 text-[1.05rem] text-[#5c6f79]">
               {loading
                 ? "Buscando productos..."
                 : `Mostrando ${products.length} de ${totalProducts} productos`}
             </p>
           </header>
 
-          {error ? <p className={styles.error}>{error}</p> : null}
+          {error ? (
+            <p className="m-0 rounded-xl border border-[#f6caca] bg-[#ffecec] px-3 py-[11px] font-bold text-[#a11d1d]">
+              {error}
+            </p>
+          ) : null}
 
-          <div className={styles.grid}>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {!loading && products.length === 0 ? (
-              <article className={styles.empty}>
+              <article className="col-span-full rounded-2xl border border-[#dbe4e6] bg-white p-6 text-center font-semibold text-[#4f6168]">
                 <p>No encontramos productos con esos filtros.</p>
               </article>
             ) : null}
 
             {products.map((product) => (
-              <article key={product.id} className={styles.card}>
-                <div className={styles.imageWrap}>
+              <article
+                key={product.id}
+                className="overflow-hidden rounded-[22px] border border-[#dbe4e6] bg-white"
+              >
+                <div className="relative grid h-[230px] place-items-center bg-[linear-gradient(140deg,#f2f7f7_0%,#ebf2f3_100%)]">
                   {product.requiereReceta ? (
-                    <span className={styles.recipeBadge}>REQUIERE RECETA</span>
+                    <span className="absolute top-3 left-3 rounded-full bg-[#1f2b3d] px-2.5 py-1 text-[0.74rem] font-extrabold text-white">
+                      REQUIERE RECETA
+                    </span>
                   ) : null}
-                  <div className={styles.imageFallback}>
+                  <div className="grid size-36 place-items-center rounded-[20px] border border-[#d6e2e4] bg-white text-[2.4rem] font-extrabold tracking-[0.04em] text-[#1f6a67]">
                     {getProductMonogram(product.nombre)}
                   </div>
                 </div>
-                <div className={styles.cardBody}>
-                  <h3>{product.nombre}</h3>
-                  <p className={styles.classification}>{product.clasificacion}</p>
-                  <p className={styles.tipo}>{formatTipo(product.tipoAdquisicion)}</p>
-                  <p className={styles.priceLabel}>PRECIO</p>
+                <div className="px-4 pt-4 pb-[14px]">
+                  <h3 className="m-0 text-[1.5rem] text-[#11223a]">{product.nombre}</h3>
+                  <p className="mt-2 mb-1 font-bold text-[#2b6f6d]">{product.clasificacion}</p>
+                  <p className="mb-1 text-[0.92rem] font-bold text-[#607781]">
+                    {formatTipo(product.tipoAdquisicion)}
+                  </p>
+                  <p className="m-0 text-[0.88rem] font-bold text-[#8797a0]">PRECIO</p>
                   {product.stock <= 0 ? (
-                    <p className={styles.outOfStockText}>
+                    <p className="mt-1.5 text-[0.92rem] font-bold text-[#a01919]">
                       No disponible por falta de stock
                     </p>
                   ) : null}
-                  <div className={styles.priceRow}>
-                    <strong>{formatMoney(product.precio)}</strong>
+                  <div className="mt-1.5 flex items-center justify-between gap-3">
+                    <strong className="text-[1.9rem] text-[#195d5a]">
+                      {formatMoney(product.precio)}
+                    </strong>
                     {product.stock > 0 ? (
-                      <Link href={`/producto/${product.id}`} className={styles.detailBtn}>
+                      <Link
+                        href={`/producto/${product.id}`}
+                        className="grid h-[42px] min-w-[54px] place-items-center rounded-full bg-[#1f6a67] px-[14px] text-[0.95rem] font-bold text-white no-underline"
+                      >
                         Ver
                       </Link>
                     ) : (
                       <button
                         type="button"
-                        className={styles.disabledBtn}
+                        className="grid h-[42px] min-w-[54px] place-items-center rounded-full border-0 bg-[#d6dde0] px-[14px] text-[0.95rem] font-bold text-[#6e8088]"
                         disabled
                         aria-disabled="true"
                       >
@@ -340,13 +365,13 @@ function CatalogoPageContent() {
                   {product.stock <= 0 ? (
                     <button
                       type="button"
-                      className={styles.notifyBtn}
+                      className="mt-2.5 w-full rounded-xl border border-[#1f6a67] bg-white px-3 py-2.5 text-[0.9rem] font-bold text-[#1f6a67] disabled:cursor-not-allowed disabled:opacity-70"
                       onClick={() => requestRestockNotification(product.id)}
                       disabled={notifyRequested.includes(product.id)}
                     >
                       {notifyRequested.includes(product.id)
                         ? "Te notificaremos cuando haya stock"
-                        : "Notificarme cuando este disponible"}
+                        : "Notificarme cuando esté disponible"}
                     </button>
                   ) : null}
                 </div>
@@ -355,21 +380,23 @@ function CatalogoPageContent() {
           </div>
 
           {!loading && products.length > 0 ? (
-            <div className={styles.pagination}>
+            <div className="flex items-center justify-end gap-2.5 rounded-[14px] border border-[#dbe4e6] bg-white px-3 py-2.5 max-[760px]:justify-between">
               <button
                 type="button"
                 onClick={() => goToPage(currentPage - 1)}
                 disabled={currentPage === 1}
+                className="min-w-24 cursor-pointer rounded-[10px] border border-[#c8d7dc] bg-[#f7fbfb] px-3 py-2 font-bold text-[#1f6a67] disabled:cursor-not-allowed disabled:opacity-45"
               >
                 Anterior
               </button>
-              <span>
-                Pagina {currentPage} de {totalPages}
+              <span className="font-bold text-[#506872]">
+                Página {currentPage} de {totalPages}
               </span>
               <button
                 type="button"
                 onClick={() => goToPage(currentPage + 1)}
                 disabled={currentPage === totalPages}
+                className="min-w-24 cursor-pointer rounded-[10px] border border-[#c8d7dc] bg-[#f7fbfb] px-3 py-2 font-bold text-[#1f6a67] disabled:cursor-not-allowed disabled:opacity-45"
               >
                 Siguiente
               </button>
@@ -383,7 +410,7 @@ function CatalogoPageContent() {
 
 export default function CatalogoPage() {
   return (
-    <Suspense fallback={<div className={styles.page}>Cargando catalogo...</div>}>
+    <Suspense fallback={<div className="px-4 py-5">Cargando catálogo...</div>}>
       <CatalogoPageContent />
     </Suspense>
   );

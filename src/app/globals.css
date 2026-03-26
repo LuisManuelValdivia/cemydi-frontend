@@ -1,3 +1,5 @@
+@import "tailwindcss";
+
 :root {
   --brand-900: #0f3d3b;
   --brand-800: #154f4d;
@@ -39,6 +41,13 @@ h1, h2, h3, h4 {
 a, button {
   min-height: 44px;
   min-width: 44px;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
 }
 
 .appShell {

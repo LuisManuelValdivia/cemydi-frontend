@@ -9,59 +9,31 @@ import {
   requestPasswordReset,
   verifyPasswordResetCode,
 } from "@/services/auth";
-import styles from "../login/login.module.css";
 
 const OTP_LENGTH = 6;
 const RESEND_COOLDOWN_SECONDS = 60;
 
-const otpRowStyle: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(6, minmax(0, 1fr))",
-  gap: "10px",
-  width: "100%",
-};
-
-const otpInputStyle: React.CSSProperties = {
-  width: "100%",
-  minWidth: 0,
-  height: "48px",
-  border: "1px solid #d6e5e5",
-  borderRadius: "14px",
-  textAlign: "center",
-  fontSize: "1.15rem",
-  fontWeight: 700,
-  color: "#0f3d3b",
-  background: "#fff",
-  outline: "none",
-};
-
-const passwordFieldStyle: React.CSSProperties = {
-  position: "relative",
-  width: "100%",
-};
-
-const passwordInputStyle: React.CSSProperties = {
-  width: "100%",
-  minWidth: 0,
-  paddingRight: "68px",
-};
-
-const revealButtonStyle: React.CSSProperties = {
-  position: "absolute",
-  top: "50%",
-  right: "12px",
-  transform: "translateY(-50%)",
-  border: "none",
-  background: "transparent",
-  color: "#6b7280",
-  fontSize: "0.82rem",
-  fontWeight: 700,
-  cursor: "pointer",
-  minWidth: "auto",
-  minHeight: "auto",
-  padding: 0,
-  margin: 0,
-};
+const authShellClassName =
+  "min-h-[calc(100vh-120px)] bg-[linear-gradient(180deg,#eef7f6_0%,#f8fbfb_100%)] px-3 py-5 min-[521px]:px-4 min-[521px]:py-10";
+const containerClassName =
+  "mx-auto grid max-w-[1140px] overflow-hidden rounded-[28px] border border-[var(--border-soft)] bg-white shadow-[var(--shadow-md)] min-[900px]:grid-cols-[1.02fr_1fr]";
+const sideClassName =
+  "relative hidden min-h-[600px] bg-[linear-gradient(180deg,#1e6260_0%,#0f3d3b_100%)] min-[900px]:block";
+const overlayClassName =
+  "absolute inset-0 bg-[linear-gradient(to_top,rgba(15,61,59,0.96),rgba(30,98,96,0.42),transparent)]";
+const brandClassName =
+  "absolute right-[34px] bottom-[34px] left-[34px] z-[2] text-white";
+const rightClassName =
+  "flex items-center justify-center bg-white px-3 py-4 min-[521px]:px-6 min-[521px]:py-7 min-[900px]:px-[50px] min-[900px]:py-[46px]";
+const cardClassName = "w-full max-w-[480px]";
+const inputClassName =
+  "h-11 rounded-[14px] border border-[#d6e5e5] bg-white px-3 text-[0.98rem] text-[#0f3d3b] outline-none focus:border-[#2ba2a1] focus:shadow-[0_0_0_3px_rgba(43,162,161,0.2)] min-[521px]:h-12 min-[521px]:px-3.5 min-[521px]:text-base";
+const inputErrorClassName = "border-[#ef4444] bg-[#fff7f7]";
+const errorTextClassName = "mt-[-4px] text-xs text-[#dc2626]";
+const primaryButtonClassName =
+  "mt-2 h-[46px] rounded-[14px] border-0 bg-[#1e6260] font-bold text-white transition hover:bg-[#18514f] disabled:cursor-not-allowed disabled:opacity-60 min-[521px]:h-[48px]";
+const inlineButtonClassName =
+  "inline-flex min-h-0 items-center justify-center rounded-[10px] border border-[#1e6260] bg-transparent px-[10px] py-1 text-[0.78rem] font-bold text-[#1e6260] disabled:cursor-not-allowed disabled:opacity-60";
 
 function ResetPasswordContent() {
   const router = useRouter();
@@ -226,31 +198,45 @@ function ResetPasswordContent() {
   };
 
   return (
-    <section className={styles.authShell}>
-      <div className={styles.container}>
-        <div className={styles.left}>
-          <div className={styles.overlay} />
-          <div className={styles.brandContent}>
-            <p>CEMYDI</p>
-            <h2>Restablece tu contraseña</h2>
-            <span>
+    <section className={authShellClassName}>
+      <div className={containerClassName}>
+        <div className={sideClassName}>
+          <div className="absolute inset-0 bg-[url('/fondowan.png')] bg-cover bg-center opacity-[0.85] mix-blend-overlay" />
+          <div className={overlayClassName} />
+          <div className={brandClassName}>
+            <p className="mb-2 text-xs uppercase tracking-[0.2em] text-[#dcfce7]">CEMYDI</p>
+            <h2 className="mb-2 text-[2rem]">Restablece tu contraseña</h2>
+            <span className="text-sm text-[#dcfce7]">
               Primero confirma el código OTP y después define una nueva contraseña.
             </span>
           </div>
         </div>
 
-        <div className={styles.right}>
-          <div className={styles.card}>
-            <h2>{codeVerified ? "Nueva contraseña" : "Ingresa el OTP"}</h2>
-            <p className={styles.description}>
+        <div className={rightClassName}>
+          <div className={cardClassName}>
+            <div className="mb-4 inline-flex size-[66px] items-center justify-center rounded-[20px] bg-[linear-gradient(180deg,rgba(43,162,161,0.14),rgba(30,98,96,0.08))] text-[#1e6260]">
+              <svg viewBox="0 0 24 24" className="size-8" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <path d="M7 10V7a5 5 0 0 1 10 0v3" />
+                <rect x="5" y="10" width="14" height="10" rx="2" />
+              </svg>
+            </div>
+            <h2 className="mb-2 text-[2rem] text-[#0f3d3b]">
+              {codeVerified ? "Nueva contraseña" : "Ingresa el OTP"}
+            </h2>
+            <p className="mb-4 text-sm leading-[1.65] text-gray-600">
               {codeVerified
                 ? "El código fue validado correctamente. Ahora crea tu nueva contraseña."
                 : "Escribe el código que enviamos a tu correo para continuar."}
             </p>
+            <span className="mb-[18px] inline-flex items-center rounded-full bg-[#eef7f6] px-3 py-2 text-xs font-bold text-[#1e6260]">
+              Proceso seguro de recuperación
+            </span>
 
             {!codeVerified ? (
-              <form onSubmit={handleVerifyCode} noValidate>
-                <label htmlFor="correo">Correo electrónico</label>
+              <form onSubmit={handleVerifyCode} noValidate className="grid gap-2.5">
+                <label htmlFor="correo" className="text-sm font-semibold text-gray-800">
+                  Correo electrónico
+                </label>
                 <input
                   id="correo"
                   type="email"
@@ -259,12 +245,15 @@ function ResetPasswordContent() {
                     setCorreo(e.target.value);
                     setCodeVerified(false);
                   }}
-                  className={emailError ? styles.inputError : ""}
+                  autoComplete="email"
+                  className={`${inputClassName} ${emailError ? inputErrorClassName : ""}`}
                 />
-                {emailError ? <span className={styles.errorText}>{emailError}</span> : null}
+                {emailError ? (
+                  <span className={errorTextClassName}>{emailError}</span>
+                ) : null}
 
-                <label>Código OTP</label>
-                <div style={otpRowStyle}>
+                <label className="text-sm font-semibold text-gray-800">Código OTP</label>
+                <div className="grid w-full grid-cols-6 gap-2 min-[521px]:gap-2.5">
                   {otpValues.map((value, index) => (
                     <input
                       key={index}
@@ -277,40 +266,46 @@ function ResetPasswordContent() {
                       value={value}
                       onChange={(e) => handleOtpChange(index, e.target.value)}
                       onKeyDown={(e) => handleOtpKeyDown(index, e)}
-                      style={otpInputStyle}
+                      aria-label={`Dígito ${index + 1} del código OTP`}
+                      className="h-[46px] min-w-0 rounded-[14px] border border-[#d6e5e5] bg-white text-center text-[19px] font-bold text-[#0f3d3b] outline-none focus:border-[#2ba2a1] focus:shadow-[0_0_0_3px_rgba(43,162,161,0.2)] min-[521px]:h-[52px] min-[521px]:text-[22px]"
                     />
                   ))}
                 </div>
-                {codeError && codigo ? <span className={styles.errorText}>{codeError}</span> : null}
+                {codeError && codigo ? (
+                  <span className={errorTextClassName}>{codeError}</span>
+                ) : null}
 
-                <button type="submit" disabled={verifying}>
+                <button type="submit" disabled={verifying} className={primaryButtonClassName}>
                   {verifying ? "Verificando..." : "Continuar"}
                 </button>
 
-                <p className={styles.description} style={{ textAlign: "center", marginTop: "12px" }}>
+                <p className="mt-3 text-center text-sm leading-[1.6] text-gray-600">
                   ¿No recibiste el código?{" "}
                   <button
                     type="button"
                     onClick={handleResendCode}
                     disabled={saving || cooldown > 0}
-                    className={styles.secondaryButton}
-                    style={{ minHeight: "auto", padding: "4px 10px", marginTop: 0 }}
+                    className={inlineButtonClassName}
                   >
                     {cooldown > 0 ? `Reenviar en ${cooldown}s` : "Reenviar código"}
                   </button>
                 </p>
               </form>
             ) : (
-              <form onSubmit={handleSavePassword} noValidate>
-                <label htmlFor="newPassword">Nueva contraseña</label>
-                <div style={passwordFieldStyle}>
+              <form onSubmit={handleSavePassword} noValidate className="grid gap-2.5">
+                <label htmlFor="newPassword" className="text-sm font-semibold text-gray-800">
+                  Nueva contraseña
+                </label>
+                <div className="relative w-full">
                   <input
                     id="newPassword"
                     type={showPasswords.password ? "text" : "password"}
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    className={passwordError ? styles.inputError : ""}
-                    style={passwordInputStyle}
+                    autoComplete="new-password"
+                    className={`${inputClassName} w-full pr-[68px] ${
+                      passwordError ? inputErrorClassName : ""
+                    }`}
                   />
                   <button
                     type="button"
@@ -320,21 +315,25 @@ function ResetPasswordContent() {
                         password: !current.password,
                       }))
                     }
-                    style={revealButtonStyle}
+                    className="absolute top-1/2 right-3 min-h-0 min-w-0 -translate-y-1/2 border-0 bg-transparent p-0 text-[0.82rem] font-bold text-gray-500"
                   >
                     {showPasswords.password ? "Ocultar" : "Ver"}
                   </button>
                 </div>
 
-                <label htmlFor="confirmPassword">Confirmar contraseña</label>
-                <div style={passwordFieldStyle}>
+                <label htmlFor="confirmPassword" className="text-sm font-semibold text-gray-800">
+                  Confirmar contraseña
+                </label>
+                <div className="relative w-full">
                   <input
                     id="confirmPassword"
                     type={showPasswords.confirm ? "text" : "password"}
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className={passwordError ? styles.inputError : ""}
-                    style={passwordInputStyle}
+                    autoComplete="new-password"
+                    className={`${inputClassName} w-full pr-[68px] ${
+                      passwordError ? inputErrorClassName : ""
+                    }`}
                   />
                   <button
                     type="button"
@@ -344,22 +343,25 @@ function ResetPasswordContent() {
                         confirm: !current.confirm,
                       }))
                     }
-                    style={revealButtonStyle}
+                    className="absolute top-1/2 right-3 min-h-0 min-w-0 -translate-y-1/2 border-0 bg-transparent p-0 text-[0.82rem] font-bold text-gray-500"
                   >
                     {showPasswords.confirm ? "Ocultar" : "Ver"}
                   </button>
                 </div>
                 {passwordError ? (
-                  <span className={styles.errorText}>{passwordError}</span>
+                  <span className={errorTextClassName}>{passwordError}</span>
                 ) : null}
 
-                <button type="submit" disabled={saving}>
+                <button type="submit" disabled={saving} className={primaryButtonClassName}>
                   {saving ? "Actualizando..." : "Guardar contraseña"}
                 </button>
               </form>
             )}
 
-            <Link href="/forgot-password" className={styles.forgotLink}>
+            <Link
+              href="/forgot-password"
+              className="mt-[18px] inline-flex text-sm font-bold text-[#1e6260] no-underline hover:underline"
+            >
               Volver al paso anterior
             </Link>
           </div>
@@ -371,7 +373,7 @@ function ResetPasswordContent() {
 
 export default function ResetPasswordPage() {
   return (
-    <Suspense fallback={<section className={styles.authShell} />}>
+    <Suspense fallback={<section className={authShellClassName} />}>
       <ResetPasswordContent />
     </Suspense>
   );
