@@ -13,6 +13,13 @@ export type CatalogProduct = {
   tipoAdquisicion: "VENTA" | "RENTA" | "MIXTO";
   requiereReceta: boolean;
   activo: boolean;
+  imageUrl: string | null;
+  images: Array<{
+    id: number;
+    imageUrl: string;
+    sortOrder: number;
+    createdAt: string;
+  }>;
   createdAt: string;
 };
 

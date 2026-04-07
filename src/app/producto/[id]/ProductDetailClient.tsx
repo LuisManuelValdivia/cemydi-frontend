@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import type { CatalogProduct } from "@/services/catalog";
+import { getCatalogProducts, type CatalogProduct } from "@/services/catalog";
 import {
   MyProductReview,
   ProductReview,
@@ -12,7 +12,9 @@ import {
   getMyProductReview,
 } from "@/services/reviews";
 import { useAuth } from "@/context/AuthContext";
+import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
+import styles from "./producto.module.css";
 
 function formatMoney(value: number) {
   return new Intl.NumberFormat("es-MX", {
@@ -52,7 +54,7 @@ function getTipoLabel(tipo: CatalogProduct["tipoAdquisicion"]) {
 
 function renderStars(value: number) {
   const safeValue = Math.max(0, Math.min(5, value));
-  return `${"★".repeat(safeValue)}${"☆".repeat(5 - safeValue)}`;
+  return `${"\u2605".repeat(safeValue)}${"\u2606".repeat(5 - safeValue)}`;
 }
 
 type ProductDetailClientProps = {
@@ -64,8 +66,14 @@ export default function ProductDetailClient({
   product,
   productId,
 }: ProductDetailClientProps) {
+  const router = useRouter();
+  const relatedTrackRef = useRef<HTMLDivElement | null>(null);
   const { user } = useAuth();
   const [notifyRequested, setNotifyRequested] = useState(false);
+  const [relatedProducts, setRelatedProducts] = useState<CatalogProduct[]>([]);
+  const [relatedLoading, setRelatedLoading] = useState(false);
+  const [canScrollRelatedPrev, setCanScrollRelatedPrev] = useState(false);
+  const [canScrollRelatedNext, setCanScrollRelatedNext] = useState(false);
   const [reviews, setReviews] = useState<ProductReview[]>([]);
   const [reviewsSummary, setReviewsSummary] = useState<ProductReviewSummary>({
     count: 0,
@@ -75,10 +83,47 @@ export default function ProductDetailClient({
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [savingReview, setSavingReview] = useState(false);
   const [myReview, setMyReview] = useState<MyProductReview | null>(null);
+  const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(
+    product.imageUrl ?? null,
+  );
   const [reviewForm, setReviewForm] = useState({
     rating: 0,
     comment: "",
   });
+  const galleryImages = useMemo(() => {
+    if (product.images.length > 0) {
+      return product.images.map((image) => ({
+        key: String(image.id),
+        url: image.imageUrl,
+      }));
+    }
+
+    if (product.imageUrl) {
+      return [{ key: "primary", url: product.imageUrl }];
+    }
+
+    return [] as Array<{ key: string; url: string }>;
+  }, [product.imageUrl, product.images]);
+
+  useEffect(() => {
+    setSelectedImageUrl(product.imageUrl ?? null);
+  }, [product.imageUrl]);
+
+  const selectedImageIndex = useMemo(() => {
+    if (!selectedImageUrl) return -1;
+    return galleryImages.findIndex((image) => image.url === selectedImageUrl);
+  }, [galleryImages, selectedImageUrl]);
+
+  const showGalleryArrows = galleryImages.length > 1;
+
+  const moveGallery = (direction: -1 | 1) => {
+    if (galleryImages.length <= 1) return;
+
+    const currentIndex = selectedImageIndex >= 0 ? selectedImageIndex : 0;
+    const nextIndex =
+      (currentIndex + direction + galleryImages.length) % galleryImages.length;
+    setSelectedImageUrl(galleryImages[nextIndex]?.url ?? null);
+  };
 
   const loadReviews = useCallback(async () => {
     try {
@@ -100,6 +145,78 @@ export default function ProductDetailClient({
   useEffect(() => {
     void loadReviews();
   }, [loadReviews]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadRelatedProducts = async () => {
+      try {
+        setRelatedLoading(true);
+        const result = await getCatalogProducts({
+          clasificaciones: [product.clasificacion],
+          page: 1,
+          pageSize: 8,
+        });
+
+        if (cancelled) return;
+
+        setRelatedProducts(
+          result.products.filter((item) => item.id !== productId).slice(0, 8),
+        );
+      } catch {
+        if (!cancelled) {
+          setRelatedProducts([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setRelatedLoading(false);
+        }
+      }
+    };
+
+    void loadRelatedProducts();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [product.clasificacion, productId]);
+
+  const updateRelatedArrows = useCallback(() => {
+    const node = relatedTrackRef.current;
+    if (!node) {
+      setCanScrollRelatedPrev(false);
+      setCanScrollRelatedNext(false);
+      return;
+    }
+
+    const maxScrollLeft = node.scrollWidth - node.clientWidth;
+    setCanScrollRelatedPrev(node.scrollLeft > 8);
+    setCanScrollRelatedNext(maxScrollLeft - node.scrollLeft > 8);
+  }, []);
+
+  useEffect(() => {
+    updateRelatedArrows();
+    const node = relatedTrackRef.current;
+    if (!node) return;
+
+    const handleScroll = () => updateRelatedArrows();
+    node.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("resize", updateRelatedArrows);
+
+    return () => {
+      node.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("resize", updateRelatedArrows);
+    };
+  }, [relatedProducts, updateRelatedArrows]);
+
+  const scrollRelated = (direction: -1 | 1) => {
+    const node = relatedTrackRef.current;
+    if (!node) return;
+
+    const card = node.querySelector<HTMLElement>("[data-related-card='true']");
+    const scrollAmount = card ? card.offsetWidth + 16 : Math.max(node.clientWidth * 0.8, 280);
+    node.scrollBy({ left: direction * scrollAmount, behavior: "smooth" });
+  };
 
   const loadMyReview = useCallback(async () => {
     if (!user) {
@@ -196,85 +313,113 @@ export default function ProductDetailClient({
   };
 
   return (
-    <section className="mx-auto max-w-[1280px] px-4 pt-[26px] pb-11">
-      <nav
-        className="mb-[22px] flex flex-wrap items-center gap-2 rounded-[14px] border border-[#d7e4e7] bg-white px-[14px] py-2.5 text-[#62727f]"
-        aria-label="Migas de pan"
-      >
-        <Link href="/" className="rounded-full px-2.5 py-1.5 font-bold text-[#395768] no-underline hover:bg-[#eef4f5]">
+    <section className={styles.page}>
+      <nav className={styles.breadcrumbs} aria-label="Migas de pan">
+        <Link href="/" className={styles.crumbLink}>
           Inicio
         </Link>
-        <span className="font-bold text-[#90a3ab]">/</span>
-        <Link href="/catalogo" className="rounded-full px-2.5 py-1.5 font-bold text-[#395768] no-underline hover:bg-[#eef4f5]">
-          Catálogo
+        <span className={styles.crumbSeparator}>›</span>
+        <Link href="/catalogo" className={styles.crumbLink}>
+          Catalogo
         </Link>
-        <span className="font-bold text-[#90a3ab]">/</span>
-        <strong className="rounded-full border border-[#cde0e2] bg-[#eff6f7] px-3 py-1.5 text-[#1b5f5d]">
-          {product.nombre}
-        </strong>
+        <span className={styles.crumbSeparator}>›</span>
+        <strong className={styles.crumbCurrent}>{product.nombre}</strong>
       </nav>
 
-      <div className="grid gap-6 min-[1081px]:grid-cols-2">
-        <article className="relative grid min-h-[500px] place-items-center rounded-[28px] border border-[#dbe4e6] bg-white">
-          {product.requiereReceta ? (
-            <span className="absolute top-[18px] left-[18px] rounded-full bg-[#1c2a3f] px-2.5 py-[5px] text-[0.75rem] font-extrabold text-white">
-              REQUIERE RECETA
-            </span>
+      <div className={styles.detail}>
+        <article className={styles.imagePanel}>
+          {product.requiereReceta ? <span className={styles.badge}>REQUIERE RECETA</span> : null}
+          {showGalleryArrows ? (
+            <>
+              <button
+                type="button"
+                className={`${styles.galleryArrow} ${styles.galleryArrowLeft}`}
+                onClick={() => moveGallery(-1)}
+                aria-label="Imagen anterior"
+              >
+                ‹
+              </button>
+              <button
+                type="button"
+                className={`${styles.galleryArrow} ${styles.galleryArrowRight}`}
+                onClick={() => moveGallery(1)}
+                aria-label="Imagen siguiente"
+              >
+                ›
+              </button>
+            </>
           ) : null}
-          <div className="grid h-[340px] w-[340px] place-items-center rounded-[28px] border border-[#d7e3e6] bg-[linear-gradient(160deg,#f4f8f8_0%,#eaf1f3_100%)] text-[5.8rem] font-extrabold tracking-[0.04em] text-[#1f6a67] max-[1080px]:h-[260px] max-[1080px]:w-[260px] max-[1080px]:text-[4.2rem]">
-            {getProductMonogram(product.nombre)}
-          </div>
+          {selectedImageUrl ? (
+            <img
+              src={selectedImageUrl}
+              alt={product.nombre}
+              className={styles.visualImage}
+            />
+          ) : (
+            <div className={styles.visual}>{getProductMonogram(product.nombre)}</div>
+          )}
+
+          {galleryImages.length > 1 ? (
+            <div className={styles.thumbnailGrid}>
+              {galleryImages.map((image, index) => (
+                <button
+                  key={image.key}
+                  type="button"
+                  className={`${styles.thumbnailBtn} ${
+                    selectedImageUrl === image.url ? styles.thumbnailBtnActive : ""
+                  }`}
+                  onClick={() => setSelectedImageUrl(image.url)}
+                >
+                  <img src={image.url} alt={`Vista previa ${index + 1}`} />
+                </button>
+              ))}
+            </div>
+          ) : null}
         </article>
 
-        <article className="rounded-[28px] border border-[#dbe4e6] bg-white p-[26px]">
-          <h1 className="m-0 text-[3.2rem] leading-[1.1] text-[#111f36] max-[1080px]:text-[2.5rem]">
-            {product.nombre}
-          </h1>
-          <div className="mt-4 flex items-center gap-2.5">
-            <strong className="text-[2.8rem] text-[#1d6a67]">{formatMoney(product.precio)}</strong>
-            <span className="rounded-full bg-[#edf2f3] px-3 py-[5px] font-bold text-[#6a7e87]">
-              MXN
-            </span>
+        <article className={styles.content}>
+          <h1>{product.nombre}</h1>
+          <div className={styles.priceRow}>
+            <strong>{formatMoney(product.precio)}</strong>
+            <span>MXN</span>
           </div>
 
-          <div className="mt-5 grid gap-3 min-[700px]:grid-cols-2">
-            <div className="rounded-[14px] border border-[#e2eaec] bg-[#f8fbfb] px-4 py-[14px]">
-              <h3 className="m-0 text-[0.95rem] uppercase text-[#84959d]">Garantía</h3>
-              <p className="mt-2 text-[1.5rem] font-bold text-[#172f3e]">12 meses</p>
+          <div className={styles.metaGrid}>
+            <div>
+              <h3>Garantia</h3>
+              <p>3 meses</p>
             </div>
-            <div className="rounded-[14px] border border-[#e2eaec] bg-[#f8fbfb] px-4 py-[14px]">
-              <h3 className="m-0 text-[0.95rem] uppercase text-[#84959d]">Disponibilidad</h3>
-              <p className={`mt-2 text-[1.5rem] font-bold ${isOutOfStock ? "text-[#a01919]" : "text-[#179a4f]"}`}>
+            <div>
+              <h3>Disponibilidad</h3>
+              <p className={isOutOfStock ? styles.stockOff : styles.stock}>
                 {disponibilidad}
               </p>
             </div>
           </div>
 
-          <p className="mt-5 text-[1.2rem] leading-[1.6] text-[#36515e]">{product.descripcion}</p>
+          <p className={styles.description}>{product.descripcion}</p>
 
-          <div className="mt-4 grid gap-2">
-            <span className="font-semibold text-[#2f4a57]">Clasificación: {product.clasificacion}</span>
-            <span className="font-semibold text-[#2f4a57]">Marca: {product.marca}</span>
-            <span className="font-semibold text-[#2f4a57]">Modelo: {product.modelo}</span>
-            <span className="font-semibold text-[#2f4a57]">
-              Tipo de adquisición: {getTipoLabel(product.tipoAdquisicion)}
-            </span>
+          <div className={styles.specs}>
+            <span>Clasificacion: {product.clasificacion}</span>
+            <span>Marca: {product.marca}</span>
+            <span>Modelo: {product.modelo}</span>
+            <span>Tipo de adquisicion: {getTipoLabel(product.tipoAdquisicion)}</span>
           </div>
 
-          <div className="mt-5 grid gap-2.5">
+          <div className={styles.actions}>
             {showBuyAction ? (
               <button
                 type="button"
-                className="rounded-[14px] border-0 bg-[#1f6a67] px-[18px] py-[14px] text-[1.1rem] font-bold text-white disabled:cursor-not-allowed disabled:bg-[#d6dde0] disabled:text-[#6e8088]"
+                className={styles.primaryBtn}
                 disabled={isOutOfStock}
               >
-                Añadir al carrito
+                Anadir al carrito
               </button>
             ) : null}
             {showRentAction ? (
               <button
                 type="button"
-                className="rounded-[14px] border-2 border-[#1f6a67] bg-white px-[18px] py-[14px] text-[1.1rem] font-bold text-[#1f6a67] disabled:cursor-not-allowed disabled:border-0 disabled:bg-[#d6dde0] disabled:text-[#6e8088]"
+                className={styles.secondaryBtn}
                 disabled={isOutOfStock}
               >
                 Reservar para renta
@@ -283,7 +428,7 @@ export default function ProductDetailClient({
             {isOutOfStock ? (
               <button
                 type="button"
-                className="rounded-[14px] border border-[#1f6a67] bg-white px-[18px] py-3 text-[1.05rem] font-bold text-[#1f6a67] disabled:cursor-not-allowed disabled:opacity-70"
+                className={styles.notifyBtn}
                 onClick={() => {
                   setNotifyRequested(true);
                   toast.success("Te notificaremos cuando el producto vuelva a tener stock.");
@@ -292,18 +437,16 @@ export default function ProductDetailClient({
               >
                 {notifyRequested
                   ? "Te notificaremos cuando haya stock"
-                  : "Notificarme cuando esté disponible"}
+                  : "Notificarme cuando este disponible"}
               </button>
             ) : null}
           </div>
 
           {product.requiereReceta ? (
-            <details className="mt-[18px] rounded-xl border border-[#dce5e8] bg-[#f8fbfc] px-[14px] py-3">
-              <summary className="cursor-pointer font-bold text-[#1f2f3a]">
-                ¿Qué necesito si requiere receta?
-              </summary>
-              <p className="mt-2.5 leading-[1.55] text-[#4a606b]">
-                Debes presentar receta médica vigente y una identificación oficial.
+            <details className={styles.faq}>
+              <summary>Que necesito si requiere receta?</summary>
+              <p>
+                Debes presentar receta medica vigente y una identificacion oficial.
                 El equipo de CEMYDI valida el documento antes de confirmar la compra
                 o renta.
               </p>
@@ -312,46 +455,105 @@ export default function ProductDetailClient({
         </article>
       </div>
 
-      <section className="mt-6 rounded-[22px] border border-[#dbe4e6] bg-white p-5">
-        <div className="flex flex-col gap-3 min-[1080px]:flex-row min-[1080px]:items-center min-[1080px]:justify-between">
-          <h2 className="m-0 text-[#1a2a37]">Reseñas de clientes</h2>
-          <button
-            type="button"
-            className="rounded-[10px] bg-[#1f6a67] px-[14px] py-2.5 font-bold text-white"
-            onClick={onOpenReviewModal}
-          >
+      <section className={styles.relatedSection}>
+        <div className={styles.relatedHeader}>
+          <h2>Productos relacionados</h2>
+          <span>Misma clasificacion</span>
+        </div>
+
+        {relatedLoading ? <p className={styles.info}>Cargando productos relacionados...</p> : null}
+
+        {!relatedLoading && relatedProducts.length > 0 ? (
+          <div className={styles.relatedCarousel}>
+            <button
+              type="button"
+              className={`${styles.relatedArrow} ${styles.relatedArrowLeft}`}
+              onClick={() => scrollRelated(-1)}
+              aria-label="Ver productos relacionados anteriores"
+              disabled={!canScrollRelatedPrev}
+            >
+              ‹
+            </button>
+            <div ref={relatedTrackRef} className={styles.relatedTrack}>
+              <div className={styles.relatedGrid}>
+            {relatedProducts.map((item) => (
+              <article
+                key={item.id}
+                className={styles.relatedCard}
+                data-related-card="true"
+                role="link"
+                tabIndex={0}
+                onClick={() => router.push(`/producto/${item.id}`)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    router.push(`/producto/${item.id}`);
+                  }
+                }}
+              >
+                <div className={styles.relatedImageWrap}>
+                  {item.requiereReceta ? (
+                    <span className={styles.relatedBadge}>Requiere receta</span>
+                  ) : null}
+                  {item.imageUrl ? (
+                    <img
+                      src={item.imageUrl}
+                      alt={item.nombre}
+                      className={styles.relatedImage}
+                    />
+                  ) : (
+                    <div className={styles.relatedFallback}>
+                      {getProductMonogram(item.nombre)}
+                    </div>
+                  )}
+                </div>
+                <div className={styles.relatedBody}>
+                  <h3>{item.nombre}</h3>
+                  <p>{item.clasificacion}</p>
+                  <strong>{formatMoney(item.precio)}</strong>
+                </div>
+              </article>
+            ))}
+              </div>
+          </div>
+            <button
+              type="button"
+              className={`${styles.relatedArrow} ${styles.relatedArrowRight}`}
+              onClick={() => scrollRelated(1)}
+              aria-label="Ver más productos relacionados"
+              disabled={!canScrollRelatedNext}
+            >
+              ›
+            </button>
+          </div>
+        ) : null}
+      </section>
+
+      <section className={styles.reviewSection}>
+        <div className={styles.reviewHeader}>
+          <h2>Reseñas de clientes</h2>
+          <button type="button" className={styles.reviewBtn} onClick={onOpenReviewModal}>
             {canEditReview ? "Editar comentario" : "Agregar comentario"}
           </button>
         </div>
-        <p className="mt-2.5 font-semibold text-[#415f6b]">
+        <p className={styles.reviewSummary}>
           {reviewsSummary.count > 0
             ? `${reviewsSummary.averageRating.toFixed(1)} / 5 (${reviewsSummary.count} reseñas)`
-            : "Aún no hay reseñas aprobadas para este producto."}
+            : "Aun no hay reseñas aprobadas para este producto."}
         </p>
 
-        {reviewsLoading ? (
-          <p className="mb-4 rounded-xl bg-[#edf4f5] px-3 py-[11px] font-bold text-[#3d5d66]">
-            Cargando reseñas...
-          </p>
-        ) : null}
+        {reviewsLoading ? <p className={styles.info}>Cargando reseñas...</p> : null}
 
         {reviews.length > 0 ? (
-          <div className="mt-[14px] grid gap-2.5">
+          <div className={styles.reviewList}>
             {reviews.map((item) => (
-              <article
-                key={item.id}
-                className="rounded-xl border border-[#e0eaec] bg-[#f8fbfc] p-3"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <strong className="text-[#1a2f3b]">{item.user.nombre}</strong>
-                  <span className="text-[0.9rem] text-[#5f7780]">
-                    {new Date(item.createdAt).toLocaleDateString("es-MX")}
-                  </span>
+              <article key={item.id} className={styles.reviewCard}>
+                <div className={styles.reviewCardTop}>
+                  <strong>{item.user.nombre}</strong>
+                  <span>{new Date(item.createdAt).toLocaleDateString("es-MX")}</span>
                 </div>
-                <p className="mt-[7px] mb-1 text-[1.05rem] tracking-[0.05em] text-[#dc9a1a]">
-                  {renderStars(item.rating)}
-                </p>
-                <p className="m-0 leading-[1.45] text-[#2f4a57]">{item.comment}</p>
+                <p className={styles.reviewStars}>{renderStars(item.rating)}</p>
+                <p className={styles.reviewText}>{item.comment}</p>
               </article>
             ))}
           </div>
@@ -360,7 +562,7 @@ export default function ProductDetailClient({
 
       {showReviewModal ? (
         <div
-          className="fixed inset-0 z-[80] grid place-items-center bg-[rgba(9,19,29,0.58)] p-4"
+          className={styles.modalOverlay}
           onClick={() => {
             if (!savingReview) {
               setShowReviewModal(false);
@@ -368,23 +570,21 @@ export default function ProductDetailClient({
           }}
         >
           <div
-            className="w-full max-w-[540px] rounded-2xl border border-[#d5e2e5] bg-white p-4"
+            className={styles.modal}
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="mb-3 text-[#192e39]">
-              {canEditReview ? "Editar comentario" : "Calificar producto"}
-            </h3>
+            <h3>{canEditReview ? "Editar comentario" : "Calificar producto"}</h3>
             <form onSubmit={submitReview}>
-              <div className="mb-3 flex gap-2">
+              <div className={styles.starPicker}>
                 {[1, 2, 3, 4, 5].map((star) => (
                   <button
                     key={star}
                     type="button"
-                    className={`grid size-[42px] place-items-center rounded-lg border text-[1.25rem] ${
+                    className={
                       reviewForm.rating >= star
-                        ? "border-[#ebb755] bg-[#fff8ea] text-[#d9971a]"
-                        : "border-[#d3dde1] bg-white text-[#9aa9af]"
-                    }`}
+                        ? `${styles.starBtn} ${styles.starBtnActive}`
+                        : styles.starBtn
+                    }
                     onClick={() => {
                       if (canEditReview) return;
                       setReviewForm((prev) => ({ ...prev, rating: star }));
@@ -392,14 +592,12 @@ export default function ProductDetailClient({
                     disabled={canEditReview}
                     aria-label={`Calificar con ${star} estrellas`}
                   >
-                    {"★"}
+                    {"\u2605"}
                   </button>
                 ))}
               </div>
               {canEditReview ? (
-                <p className="mb-4 rounded-xl bg-[#edf4f5] px-3 py-[11px] font-bold text-[#3d5d66]">
-                  La calificación no se puede editar.
-                </p>
+                <p className={styles.info}>La calificacion no se puede editar.</p>
               ) : null}
 
               <textarea
@@ -410,13 +608,12 @@ export default function ProductDetailClient({
                 }
                 minLength={5}
                 maxLength={500}
-                className="min-h-[110px] w-full resize-y rounded-[10px] border border-[#d0dde0] p-2.5 text-[#203944] outline-none"
               />
 
-              <div className="mt-3 flex justify-end gap-2.5">
+              <div className={styles.modalActions}>
                 <button
                   type="button"
-                  className="rounded-[14px] border-2 border-[#1f6a67] bg-white px-[18px] py-[14px] text-[1.1rem] font-bold text-[#1f6a67] disabled:cursor-not-allowed disabled:border-0 disabled:bg-[#d6dde0] disabled:text-[#6e8088]"
+                  className={styles.secondaryBtn}
                   onClick={() => setShowReviewModal(false)}
                   disabled={savingReview}
                 >
@@ -424,7 +621,7 @@ export default function ProductDetailClient({
                 </button>
                 <button
                   type="submit"
-                  className="rounded-[14px] border-0 bg-[#1f6a67] px-[18px] py-[14px] text-[1.1rem] font-bold text-white disabled:cursor-not-allowed disabled:bg-[#d6dde0] disabled:text-[#6e8088]"
+                  className={styles.primaryBtn}
                   disabled={savingReview}
                 >
                   {savingReview
