@@ -6,7 +6,6 @@ import { useAuth } from "@/context/AuthContext";
 import { logoutUser } from "@/services/auth";
 import { updateMyProfile } from "@/services/users";
 import toast from "react-hot-toast";
-import styles from "./perfil.module.css";
 
 type ProfileForm = {
   nombre: string;
@@ -23,6 +22,9 @@ function toForm(user: Record<string, unknown>): ProfileForm {
     direccion: String(user.direccion ?? ""),
   };
 }
+
+const inputClassName =
+  "w-full rounded-[14px] border border-[#d6dee2] bg-white px-4 py-[14px] text-[1.06rem] text-[#1f3b4d] transition-[border-color,box-shadow] focus:border-[#2b9f9b] focus:shadow-[0_0_0_3px_rgba(43,159,155,0.18)] focus:outline-none disabled:border-dashed disabled:bg-[#f5f8f9] disabled:text-[#49596c]";
 
 export default function PerfilPage() {
   const router = useRouter();
@@ -54,7 +56,7 @@ export default function PerfilPage() {
   }, [form.nombre]);
 
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
   ) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
@@ -84,7 +86,7 @@ export default function PerfilPage() {
     }
 
     if (!correo || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) {
-      toast.error("Ingresa un correo valido.");
+      toast.error("Ingresa un correo válido.");
       return;
     }
 
@@ -115,7 +117,7 @@ export default function PerfilPage() {
     try {
       await logoutUser();
     } catch {
-      // Si la sesion ya expiro, igual limpiamos el estado local.
+      // Si la sesión ya expiró, igual limpiamos el estado local.
     } finally {
       logout();
       toast.success("Sesión cerrada correctamente");
@@ -123,38 +125,52 @@ export default function PerfilPage() {
     }
   };
 
-  if (loading) return <p className={styles.noAuth}>Cargando perfil...</p>;
-  if (!user) return <p className={styles.noAuth}>No autenticado</p>;
+  if (loading) {
+    return <p className="p-10 text-center font-semibold text-gray-500">Cargando perfil...</p>;
+  }
+  if (!user) {
+    return <p className="p-10 text-center font-semibold text-gray-500">No autenticado</p>;
+  }
 
   return (
-    <div className={styles.page}>
-      <div className={styles.card}>
-        <aside className={styles.sidebar}>
-          <div className={styles.avatar}>{initials}</div>
-          <h2>{form.nombre || "Usuario"}</h2>
-          <p>{form.correo || "Sin correo"}</p>
-          <div className={styles.statusBox}>
+    <div className="min-h-[calc(100vh-120px)] bg-[#f3f6f6] px-4 py-9">
+      <div className="mx-auto grid max-w-[1080px] overflow-hidden rounded-[28px] border border-[#dae5e5] bg-white shadow-[0_20px_44px_rgba(16,50,49,0.12)] min-[981px]:grid-cols-[340px_1fr]">
+        <aside className="flex flex-col gap-[14px] bg-[#1f6a67] px-[34px] py-11 text-white max-[980px]:px-[22px] max-[980px]:py-[30px]">
+          <div className="grid size-[120px] place-items-center rounded-full bg-white/14 text-[2.6rem] font-extrabold">
+            {initials}
+          </div>
+          <h2 className="mt-1 text-[2rem] leading-[1.15]">{form.nombre || "Usuario"}</h2>
+          <p className="m-0 opacity-95">{form.correo || "Sin correo"}</p>
+          <div className="mt-auto flex flex-col gap-1 rounded-[14px] border border-white/12 bg-[rgba(12,48,46,0.55)] p-4 text-[0.8rem] uppercase tracking-[0.05em]">
             <span>Estado</span>
-            <strong>Cuenta activa</strong>
+            <strong className="text-[1.15rem] normal-case tracking-normal">Cuenta activa</strong>
           </div>
         </aside>
 
-        <section className={styles.content}>
-          <div className={styles.header}>
+        <section className="px-5 pt-7 pb-8 min-[981px]:px-[46px] min-[981px]:pt-10 min-[981px]:pb-8">
+          <div className="mb-[18px] flex flex-col gap-4 border-b border-[#d4dbdc] pb-[18px] min-[981px]:flex-row min-[981px]:items-start min-[981px]:justify-between">
             <div>
-              <h3>Informacion personal</h3>
-              <p>Manten tus datos actualizados para agilizar tus compras.</p>
+              <h3 className="m-0 text-[2rem] text-[#0f3231]">Información personal</h3>
+              <p className="mt-2 text-[1.02rem] text-[#607173]">
+                Mantén tus datos actualizados para agilizar tus compras.
+              </p>
             </div>
 
             {!isEditing ? (
-              <button type="button" className={styles.primaryBtn} onClick={startEdit}>
+              <button
+                type="button"
+                className="rounded-xl bg-[#2f9e9a] px-5 py-3 text-base font-bold text-white disabled:cursor-not-allowed disabled:opacity-70"
+                onClick={startEdit}
+              >
                 Editar
               </button>
             ) : null}
           </div>
 
-          <form onSubmit={saveProfile} className={styles.form}>
-            <label htmlFor="nombre">Nombre</label>
+          <form onSubmit={saveProfile} className="grid gap-3">
+            <label htmlFor="nombre" className="text-[0.86rem] font-bold uppercase tracking-[0.03em] text-[#7c8a93]">
+              Nombre
+            </label>
             <input
               id="nombre"
               name="nombre"
@@ -163,9 +179,12 @@ export default function PerfilPage() {
               disabled={!isEditing}
               placeholder="Nombre completo"
               required
+              className={inputClassName}
             />
 
-            <label htmlFor="correo">Correo electronico</label>
+            <label htmlFor="correo" className="text-[0.86rem] font-bold uppercase tracking-[0.03em] text-[#7c8a93]">
+              Correo electrónico
+            </label>
             <input
               id="correo"
               name="correo"
@@ -175,9 +194,12 @@ export default function PerfilPage() {
               disabled={!isEditing}
               placeholder="correo@ejemplo.com"
               required
+              className={inputClassName}
             />
 
-            <label htmlFor="telefono">Telefono</label>
+            <label htmlFor="telefono" className="text-[0.86rem] font-bold uppercase tracking-[0.03em] text-[#7c8a93]">
+              Teléfono
+            </label>
             <input
               id="telefono"
               name="telefono"
@@ -185,9 +207,12 @@ export default function PerfilPage() {
               onChange={handleChange}
               disabled={!isEditing}
               placeholder="No registrado"
+              className={inputClassName}
             />
 
-            <label htmlFor="direccion">Direccion</label>
+            <label htmlFor="direccion" className="text-[0.86rem] font-bold uppercase tracking-[0.03em] text-[#7c8a93]">
+              Dirección
+            </label>
             <textarea
               id="direccion"
               name="direccion"
@@ -196,32 +221,37 @@ export default function PerfilPage() {
               disabled={!isEditing}
               placeholder="No registrada"
               rows={3}
+              className={`${inputClassName} min-h-[90px] resize-y`}
             />
 
             {isEditing ? (
-              <div className={styles.actions}>
+              <div className="mt-[14px] flex flex-col gap-3 min-[981px]:flex-row min-[981px]:justify-end max-[980px]:[&>button]:flex-1">
                 <button
                   type="button"
-                  className={styles.secondaryBtn}
+                  className="rounded-xl bg-[#e9eff0] px-5 py-3 text-base font-bold text-[#274045]"
                   onClick={cancelEdit}
                   disabled={isSaving}
                 >
                   Cancelar
                 </button>
-                <button type="submit" className={styles.primaryBtn} disabled={isSaving}>
+                <button
+                  type="submit"
+                  className="rounded-xl bg-[#2f9e9a] px-5 py-3 text-base font-bold text-white disabled:cursor-not-allowed disabled:opacity-70"
+                  disabled={isSaving}
+                >
                   {isSaving ? "Guardando..." : "Guardar cambios"}
                 </button>
               </div>
             ) : null}
           </form>
 
-          <div className={styles.footerActions}>
+          <div className="mt-[22px] flex justify-center min-[981px]:justify-end">
             <button
               type="button"
               onClick={handleLogout}
-              className={styles.logoutBtn}
+              className="border-0 bg-transparent p-0 text-base font-bold text-[#d51717] hover:underline"
             >
-              Cerrar sesion
+              Cerrar sesión
             </button>
           </div>
         </section>

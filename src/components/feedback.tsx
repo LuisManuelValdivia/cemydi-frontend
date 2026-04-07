@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect } from "react";
-import styles from "./feedback.module.css";
 
 export type ToastType = "success" | "error" | "info";
 
@@ -49,21 +48,39 @@ export function ToastViewport({
   if (toasts.length === 0) return null;
 
   return (
-    <div className={styles.toastViewport} aria-live="polite" aria-atomic="true">
+    <div
+      className="fixed top-[18px] right-[18px] z-[120] grid w-[min(360px,calc(100vw-24px))] gap-2.5 max-sm:top-3 max-sm:right-3 max-sm:left-3 max-sm:w-auto"
+      aria-live="polite"
+      aria-atomic="true"
+    >
       {toasts.map((toast) => (
         <div
           key={toast.id}
-          className={`${styles.toast} ${
+          className={`flex items-start justify-between gap-2 rounded-xl border border-transparent px-3 py-[11px] shadow-[0_10px_26px_rgba(14,36,45,0.23)] ${
             toast.type === "success"
-              ? styles.toastSuccess
+              ? "border-[#bee8cb] bg-[#edf9f1]"
               : toast.type === "error"
-                ? styles.toastError
-                : styles.toastInfo
+                ? "border-[#f1c3c3] bg-[#ffecec]"
+                : "border-[#c7dee3] bg-[#eef7f9]"
           }`}
           role="status"
         >
-          <p>{toast.text}</p>
-          <button type="button" onClick={() => onDismiss(toast.id)}>
+          <p
+            className={`m-0 text-[0.92rem] font-bold ${
+              toast.type === "success"
+                ? "text-[#165734]"
+                : toast.type === "error"
+                  ? "text-[#8c1e1e]"
+                  : "text-[#1c4c57]"
+            }`}
+          >
+            {toast.text}
+          </p>
+          <button
+            type="button"
+            onClick={() => onDismiss(toast.id)}
+            className="cursor-pointer rounded-lg bg-[rgba(19,49,60,0.1)] px-[9px] py-1.5 text-[0.78rem] font-bold text-[#17323a]"
+          >
             Cerrar
           </button>
         </div>
@@ -88,17 +105,28 @@ export function ConfirmDialog(config: ConfirmDialogConfig) {
   if (!open) return null;
 
   return (
-    <div className={styles.dialogBackdrop}>
-      <div className={styles.dialogCard} role="alertdialog" aria-modal="true">
-        <h3>{title}</h3>
-        {description ? <p>{description}</p> : null}
-        <div className={styles.dialogActions}>
-          <button type="button" className={styles.dialogCancel} onClick={onCancel} disabled={busy}>
+    <div className="fixed inset-0 z-[130] grid place-items-center bg-[rgba(8,25,31,0.48)] p-[14px]">
+      <div
+        className="grid w-[min(480px,100%)] gap-2.5 rounded-[14px] border border-[#d2e1e4] bg-white p-4"
+        role="alertdialog"
+        aria-modal="true"
+      >
+        <h3 className="m-0 text-[#16353e]">{title}</h3>
+        {description ? <p className="m-0 text-[#3f5a63]">{description}</p> : null}
+        <div className="flex justify-end gap-[9px] max-sm:flex-col">
+          <button
+            type="button"
+            className="cursor-pointer rounded-[10px] bg-[#eef4f5] px-3 py-[9px] font-bold text-[#1f454e] disabled:cursor-not-allowed disabled:opacity-65"
+            onClick={onCancel}
+            disabled={busy}
+          >
             {cancelLabel}
           </button>
           <button
             type="button"
-            className={tone === "danger" ? styles.dialogDanger : styles.dialogConfirm}
+            className={`cursor-pointer rounded-[10px] px-3 py-[9px] font-bold text-white disabled:cursor-not-allowed disabled:opacity-65 ${
+              tone === "danger" ? "bg-[#c73d3d]" : "bg-[#2c9f9b]"
+            }`}
             onClick={() => void onConfirm()}
             disabled={busy}
           >
@@ -109,4 +137,3 @@ export function ConfirmDialog(config: ConfirmDialogConfig) {
     </div>
   );
 }
-
