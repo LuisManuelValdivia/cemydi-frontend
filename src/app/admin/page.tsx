@@ -18,6 +18,9 @@ import {
   DatabaseBackupSchedule,
   DatabaseStatus,
   LoginAuditEntry,
+  MaintenanceOperation,
+  MaintenanceRunResult,
+  MaintenanceSchedule,
   ProductMode,
   ReviewStatus,
   SupplierOption,
@@ -37,12 +40,14 @@ import {
   deleteSupplier,
   deleteUser,
   createDatabaseBackupRecord,
+  createSingleSchemaDatabaseBackupRecord,
   createSingleTableDatabaseBackupRecord,
   deleteDatabaseBackupRecord,
   deleteDatabaseBackupSchedule,
   downloadDatabaseBackupById,
   getAuthSecurityOverview,
   getDatabaseBackupSchedule,
+  getMaintenanceSchedule,
   getDatabaseStatus,
   listAdminReviews,
   listDatabaseBackups,
@@ -51,6 +56,9 @@ import {
   listPromotions,
   listSuppliers,
   listUsers,
+  deleteMaintenanceSchedule,
+  runMaintenance,
+  updateMaintenanceSchedule,
   updateBrand,
   updateClassification,
   updateProduct,
@@ -74,6 +82,8 @@ type Section =
   | "reviews"
   | "profile"
   | "dbMonitoring"
+  | "backupManagement"
+  | "automation"
   | "extras";
 type Notice = { type: "success" | "error"; text: string } | null;
 type ConfirmRequest = {
@@ -83,6 +93,18 @@ type ConfirmRequest = {
   cancelLabel?: string;
   tone?: "default" | "danger";
   onConfirm: () => void | Promise<void>;
+};
+type BackupLogModalState = {
+  title: string;
+  subtitle: string;
+  summary: Array<{
+    label: string;
+    value: string;
+  }>;
+  logText: string;
+  statusLabel: string;
+  statusTone?: "success" | "pending" | "error";
+  isPending?: boolean;
 };
 const USER_PAGE_SIZE = 10;
 const PRODUCT_PAGE_SIZE = 10;
@@ -102,6 +124,7 @@ const PRODUCT_CSV_COLUMNS = [
   { key: "tipoAdquisicion", label: "TipoAdquisicion", required: true },
   { key: "requiereReceta", label: "RequiereReceta", required: false },
   { key: "activo", label: "Activo", required: false },
+  { key: "imageUrls", label: "ImageUrls", required: false },
 ] as const;
 
 type ProductCsvColumnKey = (typeof PRODUCT_CSV_COLUMNS)[number]["key"];
@@ -118,7 +141,23 @@ type ProductImportPayload = {
   tipoAdquisicion: ProductMode;
   requiereReceta: boolean;
   activo: boolean;
+  imageUrls?: string[];
 };
+
+type ProductImageDraft = {
+  previewUrl: string;
+  source: "existing" | "url" | "file";
+  imageUrl?: string;
+  file?: File;
+  id?: number;
+  createdAt?: string;
+};
+
+function revokeProductImageDraft(item: ProductImageDraft) {
+  if (item.source === "file" && item.previewUrl.startsWith("blob:")) {
+    URL.revokeObjectURL(item.previewUrl);
+  }
+}
 
 type ProductCsvImportRow = {
   lineNumber: number;
@@ -181,6 +220,7 @@ const PRODUCT_CSV_HEADER_ALIASES: Record<ProductCsvColumnKey, string[]> = {
   tipoAdquisicion: ["tipoadquisicion", "tipo_adquisicion", "tipo"],
   requiereReceta: ["requierereceta", "requiere_receta", "receta"],
   activo: ["activo", "estado"],
+  imageUrls: ["imageurls", "imageurl", "imagenes", "imagenurls", "imagenurl"],
 };
 
 const PRODUCT_CSV_REQUIRED_COLUMN_KEYS: ProductCsvColumnKey[] = PRODUCT_CSV_COLUMNS.filter(
@@ -200,6 +240,8 @@ const PRODUCT_CSV_TEMPLATE_SAMPLE_ROWS: ProductCsvTemplateRow[] = [
     tipoAdquisicion: "VENTA",
     requiereReceta: "False",
     activo: "True",
+    imageUrls:
+      "https://example.com/silla-ruedas-1.jpg|https://example.com/silla-ruedas-2.jpg",
   },
   {
     nombre: "Tanque oxigeno 680L",
@@ -213,6 +255,22 @@ const PRODUCT_CSV_TEMPLATE_SAMPLE_ROWS: ProductCsvTemplateRow[] = [
     tipoAdquisicion: "RENTA",
     requiereReceta: "True",
     activo: "True",
+    imageUrls:
+      "https://example.com/tanque-oxigeno-1.jpg|https://example.com/tanque-oxigeno-2.jpg",
+  },
+  {
+    nombre: "Andadera plegable",
+    marca: "Carex",
+    modelo: "AN-442",
+    descripcion: "Andadera de aluminio con ajuste de altura y ruedas delanteras.",
+    precio: "1890",
+    clasificacion: "Movilidad",
+    stock: "7",
+    proveedor: "Novavida",
+    tipoAdquisicion: "VENTA",
+    requiereReceta: "False",
+    activo: "True",
+    imageUrls: "",
   },
 ];
 
@@ -276,6 +334,22 @@ const defaultBackupScheduleForm = {
   everyDays: "1",
   runAtTime: "03:00",
   retentionDays: "7",
+  schemaName: "",
+};
+
+const defaultMaintenanceForm = {
+  operation: "VACUUM_ANALYZE" as MaintenanceOperation,
+  schemaName: "",
+  tableName: "",
+};
+
+const defaultMaintenanceScheduleForm = {
+  enabled: false,
+  everyDays: "1",
+  runAtTime: "04:00",
+  operation: "VACUUM_ANALYZE" as MaintenanceOperation,
+  schemaName: "",
+  tableName: "",
 };
 
 const NAME_REGEX = /^[A-Za-zÀ-ÿ\s'.-]+$/;
@@ -357,6 +431,22 @@ function validateProductPayload(form: typeof defaultProductForm) {
   }
 
   return null;
+}
+
+function isValidImageUrl(value: string) {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function parseProductImageUrlsCell(value: string) {
+  return value
+    .split(/\r?\n|\|/g)
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function validateCatalogName(value: string, label: string) {
@@ -568,7 +658,7 @@ function formatBytes(bytes: number) {
   return `${value.toFixed(exponent === 0 ? 0 : 2)} ${units[exponent]}`;
 }
 
-function formatUptime(seconds: number) {
+function formatElapsedTime(seconds: number) {
   if (!Number.isFinite(seconds) || seconds <= 0) {
     return "Sin datos";
   }
@@ -577,22 +667,30 @@ function formatUptime(seconds: number) {
   const days = Math.floor(totalSeconds / 86400);
   const hours = Math.floor((totalSeconds % 86400) / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const parts: string[] = [];
 
   if (days > 0) {
-    return `${days}d ${hours}h ${minutes}m`;
+    parts.push(`${days} ${days === 1 ? "dia" : "dias"}`);
   }
 
-  if (hours > 0) {
-    return `${hours}h ${minutes}m`;
+  if (hours > 0 || parts.length > 0) {
+    parts.push(`${hours} ${hours === 1 ? "hora" : "horas"}`);
   }
 
-  return `${minutes}m`;
+  if (minutes > 0 || parts.length === 0) {
+    parts.push(`${minutes} ${minutes === 1 ? "minuto" : "minutos"}`);
+  }
+
+  return parts.slice(0, 2).join(", ");
 }
 
 function formatTableName(tableName: string) {
   return tableName
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (char) => char.toUpperCase());
+    .split(".")
+    .map((segment) =>
+      segment.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase()),
+    )
+    .join(" / ");
 }
 
 function formatBackupRecordDate(backup: DatabaseBackupRecord) {
@@ -627,6 +725,151 @@ function formatBackupRecordDate(backup: DatabaseBackupRecord) {
   }
 
   return "Sin fecha";
+}
+
+function formatBackupOrigin(origin: DatabaseBackupRecord["origin"]) {
+  if (origin === "AUTOMATIC") return "Automatico";
+  if (origin === "TABLE") return "Tabla";
+  return "Manual";
+}
+
+function formatMaintenanceOperationLabel(operation: MaintenanceOperation) {
+  if (operation === "VACUUM_ANALYZE") {
+    return "VACUUM ANALYZE";
+  }
+
+  return operation;
+}
+
+function buildBackupLogModal({
+  backup,
+  message,
+  logText,
+  provider,
+  tableName,
+  scopeLabel,
+}: {
+  backup: DatabaseBackupRecord;
+  message: string;
+  logText: string;
+  provider?: string;
+  tableName?: string;
+  scopeLabel?: string;
+}): BackupLogModalState {
+  const generatedAt = formatBackupRecordDate(backup);
+  const sizePretty = formatBytes(backup.sizeBytes);
+  const backupType = tableName || scopeLabel ? "Respaldo selectivo" : "Respaldo completo";
+  const destination = provider ? `Google Drive (${provider})` : "Google Drive";
+  const summary = [
+    { label: "Archivo", value: backup.fileName },
+    { label: "Tipo", value: backupType },
+    { label: "Tamano", value: sizePretty },
+    { label: "Fecha", value: generatedAt },
+  ];
+
+  return {
+    title: tableName || scopeLabel ? "Respaldo selectivo completado" : "Respaldo completado",
+    subtitle: `El proceso termino correctamente. Archivo registrado en ${destination}.`,
+    summary,
+    logText:
+      logText.trim() ||
+      `${tableName ? "Respaldo selectivo" : "Respaldo completo"} generado.\n${message}`,
+    statusLabel: "Todo en orden",
+    statusTone: "success",
+  };
+}
+
+function buildPendingBackupLogModal(scopeLabel?: string): BackupLogModalState {
+  return {
+    title: scopeLabel ? "Generando respaldo selectivo" : "Generando respaldo",
+    subtitle: scopeLabel
+      ? `Se esta preparando el respaldo de ${formatTableName(scopeLabel)}.`
+      : "Se esta preparando el respaldo completo de la base de datos.",
+    summary: [
+      { label: "Estado", value: "En proceso" },
+      { label: "Tipo", value: scopeLabel ? "Respaldo selectivo" : "Respaldo completo" },
+    ],
+    logText: "Generando respaldo...\n\nEspera mientras se ejecuta el proceso y se prepara el log.",
+    statusLabel: "Generando...",
+    statusTone: "pending",
+    isPending: true,
+  };
+}
+
+function buildMaintenancePendingLogModal({
+  operation,
+  tableName,
+}: {
+  operation: MaintenanceOperation;
+  tableName?: string;
+}): BackupLogModalState {
+  const operationLabel = formatMaintenanceOperationLabel(operation);
+
+  return {
+    title: "Ejecutando mantenimiento",
+    subtitle: tableName
+      ? `Se esta ejecutando ${operationLabel} sobre la tabla ${formatTableName(tableName)}.`
+      : `Se esta ejecutando ${operationLabel} sobre toda la base de datos.`,
+    summary: [
+      { label: "Estado", value: "En proceso" },
+      { label: "Operacion", value: operationLabel },
+      { label: "Alcance", value: tableName ? formatTableName(tableName) : "Base de datos completa" },
+    ],
+    logText: `Iniciando ${operationLabel}...\n\nEspera mientras se ejecuta el mantenimiento y se acumula el log.`,
+    statusLabel: "En proceso",
+    statusTone: "pending",
+    isPending: true,
+  };
+}
+
+function buildMaintenanceSuccessLogModal(result: MaintenanceRunResult): BackupLogModalState {
+  const operationLabel = formatMaintenanceOperationLabel(result.operation);
+
+  return {
+    title: "Mantenimiento completado",
+    subtitle: "El mantenimiento PostgreSQL termino correctamente. Revisa el detalle antes de cerrar.",
+    summary: [
+      { label: "Operacion", value: operationLabel },
+      {
+        label: "Alcance",
+        value: result.tableName ? formatTableName(result.tableName) : "Base de datos completa",
+      },
+      { label: "Tablas", value: formatNumber(result.processedTables) },
+      { label: "Finalizo", value: formatDateTime(result.finishedAt) },
+    ],
+    logText: result.logText.trim() || result.message,
+    statusLabel: "Completado",
+    statusTone: "success",
+  };
+}
+
+function buildMaintenanceErrorLogModal({
+  operation,
+  tableName,
+  message,
+  logText,
+}: {
+  operation: MaintenanceOperation;
+  tableName?: string;
+  message: string;
+  logText?: string;
+}): BackupLogModalState {
+  const operationLabel = formatMaintenanceOperationLabel(operation);
+
+  return {
+    title: "Mantenimiento con error",
+    subtitle: "El proceso no pudo completarse. Revisa el log antes de cerrar.",
+    summary: [
+      { label: "Estado", value: "Error" },
+      { label: "Operacion", value: operationLabel },
+      { label: "Alcance", value: tableName ? formatTableName(tableName) : "Base de datos completa" },
+    ],
+    logText:
+      logText?.trim() ||
+      `===== INICIO MANTENIMIENTO =====\nOperacion: ${operationLabel}\nResultado: ERROR\nDetalle: ${message}\n===== FIN MANTENIMIENTO =====`,
+    statusLabel: "Error",
+    statusTone: "error",
+  };
 }
 
 function formatScheduleDateTime(value: string | null) {
@@ -705,6 +948,29 @@ function getInitialsFromName(name: string) {
   return parts.map((part) => part[0]?.toUpperCase() ?? "").join("");
 }
 
+function formatPercent(value: number, digits = 0) {
+  if (!Number.isFinite(value) || value <= 0) {
+    return "0%";
+  }
+
+  return `${value.toFixed(digits)}%`;
+}
+
+function formatConnectionStateLabel(state: string) {
+  switch (state) {
+    case "active":
+      return "Activa";
+    case "idle":
+      return "Inactiva";
+    case "idle in transaction":
+      return "Idle en transaccion";
+    case "internal":
+      return "Interna";
+    default:
+      return "Otra";
+  }
+}
+
 function validateBackupScheduleForm(form: typeof defaultBackupScheduleForm) {
   const everyDays = Number(form.everyDays);
   const retentionDays = Number(form.retentionDays);
@@ -719,6 +985,20 @@ function validateBackupScheduleForm(form: typeof defaultBackupScheduleForm) {
 
   if (!Number.isInteger(retentionDays) || retentionDays < 1 || retentionDays > 3650) {
     return "La retencion debe ser un numero entero entre 1 y 3650 dias.";
+  }
+
+  return null;
+}
+
+function validateMaintenanceScheduleForm(form: typeof defaultMaintenanceScheduleForm) {
+  const everyDays = Number(form.everyDays);
+
+  if (!Number.isInteger(everyDays) || everyDays < 1 || everyDays > 365) {
+    return "Cada cuantos dias debe ser un numero entero entre 1 y 365.";
+  }
+
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(form.runAtTime.trim())) {
+    return "La hora debe tener formato HH:mm.";
   }
 
   return null;
@@ -811,6 +1091,9 @@ function getProductCsvValue(product: AdminProduct, column: ProductCsvColumnKey) 
   if (column === "proveedor") return product.proveedor;
   if (column === "tipoAdquisicion") return product.tipoAdquisicion;
   if (column === "requiereReceta") return product.requiereReceta ? "True" : "False";
+  if (column === "imageUrls") {
+    return product.images.map((image) => image.imageUrl).join("|");
+  }
   return product.activo ? "True" : "False";
 }
 
@@ -912,6 +1195,7 @@ function createProductImportPreview(
     tipoAdquisicion: -1,
     requiereReceta: -1,
     activo: -1,
+    imageUrls: -1,
   };
 
   PRODUCT_CSV_COLUMNS.forEach((column) => {
@@ -953,6 +1237,7 @@ function createProductImportPreview(
     const tipoAdquisicionRaw = readCell("tipoAdquisicion");
     const requiereRecetaRaw = readCell("requiereReceta");
     const activoRaw = readCell("activo");
+    const imageUrlsRaw = readCell("imageUrls");
 
     const joinedRow = [
       nombre,
@@ -966,6 +1251,7 @@ function createProductImportPreview(
       tipoAdquisicionRaw,
       requiereRecetaRaw,
       activoRaw,
+      imageUrlsRaw,
     ]
       .join("")
       .trim();
@@ -989,6 +1275,12 @@ function createProductImportPreview(
     const activo = normalizeBooleanCell(activoRaw, true);
     if (activo === null && !validationError) {
       validationError = "Valor invalido en activo. Usa true o false.";
+    }
+
+    const imageUrls = parseProductImageUrlsCell(imageUrlsRaw);
+    if (!validationError && imageUrls.some((item) => !isValidImageUrl(item))) {
+      validationError =
+        "Las imagenes del CSV deben ser URLs http o https separadas por |.";
     }
 
     const formCandidate = {
@@ -1022,6 +1314,7 @@ function createProductImportPreview(
       tipoAdquisicion: tipoAdquisicion ?? "VENTA",
       requiereReceta: requiereReceta ?? false,
       activo: activo ?? true,
+      imageUrls,
     };
 
     parsedRows.push({
@@ -1197,10 +1490,22 @@ export default function AdminDashboardPage() {
   const [productForm, setProductForm] = useState(defaultProductForm);
   const [editingProductId, setEditingProductId] = useState<number | null>(null);
   const [savingProduct, setSavingProduct] = useState(false);
+  const [productExistingImages, setProductExistingImages] = useState<ProductImageDraft[]>([]);
+  const [productImageUrls, setProductImageUrls] = useState<string[]>([]);
+  const [productImageUrlInput, setProductImageUrlInput] = useState("");
+  const [productImageFiles, setProductImageFiles] = useState<ProductImageDraft[]>([]);
+  const [pendingProductImageDrafts, setPendingProductImageDrafts] = useState<ProductImageDraft[]>(
+    [],
+  );
+  const [activeProductGalleryPreview, setActiveProductGalleryPreview] = useState<string | null>(
+    null,
+  );
   const [productSearch, setProductSearch] = useState("");
   const [productPage, setProductPage] = useState(1);
   const [isProductFormCollapsed, setIsProductFormCollapsed] = useState(false);
+  const productImageFileInputRef = useRef<HTMLInputElement | null>(null);
   const productCsvInputRef = useRef<HTMLInputElement | null>(null);
+  const pendingProductImageDraftsRef = useRef<ProductImageDraft[]>([]);
   const [productImportPreview, setProductImportPreview] = useState<ProductCsvImportPreview | null>(null);
   const [selectedExistingImportRows, setSelectedExistingImportRows] = useState<number[]>([]);
   const [importingProductsFromCsv, setImportingProductsFromCsv] = useState(false);
@@ -1266,6 +1571,7 @@ export default function AdminDashboardPage() {
   const [generatingBackup, setGeneratingBackup] = useState(false);
   const [generatingTableBackup, setGeneratingTableBackup] = useState(false);
   const [showTableBackupOptions, setShowTableBackupOptions] = useState(false);
+  const [selectedBackupSchema, setSelectedBackupSchema] = useState("");
   const [selectedBackupTable, setSelectedBackupTable] = useState("");
   const [downloadingBackupId, setDownloadingBackupId] = useState<number | null>(null);
   const [deletingBackupId, setDeletingBackupId] = useState<number | null>(null);
@@ -1273,7 +1579,18 @@ export default function AdminDashboardPage() {
   const [backupScheduleForm, setBackupScheduleForm] = useState(defaultBackupScheduleForm);
   const [loadingBackupSchedule, setLoadingBackupSchedule] = useState(false);
   const [savingBackupSchedule, setSavingBackupSchedule] = useState(false);
-  const [authSecurityOverview, setAuthSecurityOverview] = useState<AuthSecurityOverview | null>(null);
+  const [maintenanceForm, setMaintenanceForm] = useState(defaultMaintenanceForm);
+  const [runningMaintenance, setRunningMaintenance] = useState(false);
+  const [maintenanceSchedule, setMaintenanceSchedule] = useState<MaintenanceSchedule | null>(null);
+  const [maintenanceScheduleForm, setMaintenanceScheduleForm] = useState(
+    defaultMaintenanceScheduleForm,
+  );
+  const [loadingMaintenanceSchedule, setLoadingMaintenanceSchedule] = useState(false);
+  const [savingMaintenanceSchedule, setSavingMaintenanceSchedule] = useState(false);
+  const [backupLogModal, setBackupLogModal] = useState<BackupLogModalState | null>(null);
+  const [authSecurityOverview, setAuthSecurityOverview] = useState<AuthSecurityOverview | null>(
+    null,
+  );
   const [loadingAuthSecurityOverview, setLoadingAuthSecurityOverview] = useState(false);
 
   const stats = useMemo(() => {
@@ -1292,6 +1609,46 @@ export default function AdminDashboardPage() {
       inventoryValue: totalValue,
     };
   }, [products, users]);
+
+  const pendingProductImageDraft = pendingProductImageDrafts[0] ?? null;
+
+  const productGalleryImages = useMemo<ProductImageDraft[]>(
+    () => [
+      ...productExistingImages,
+      ...productImageUrls.map((imageUrl) => ({
+        previewUrl: imageUrl,
+        source: "url" as const,
+        imageUrl,
+      })),
+      ...productImageFiles,
+    ],
+    [productExistingImages, productImageFiles, productImageUrls],
+  );
+
+  useEffect(() => {
+    if (productGalleryImages.length === 0) {
+      setActiveProductGalleryPreview(null);
+      return;
+    }
+
+    const currentPreviewStillExists = productGalleryImages.some(
+      (item) => item.previewUrl === activeProductGalleryPreview,
+    );
+
+    if (!currentPreviewStillExists) {
+      setActiveProductGalleryPreview(productGalleryImages[0].previewUrl);
+    }
+  }, [activeProductGalleryPreview, productGalleryImages]);
+
+  useEffect(() => {
+    pendingProductImageDraftsRef.current = pendingProductImageDrafts;
+  }, [pendingProductImageDrafts]);
+
+  useEffect(() => {
+    return () => {
+      pendingProductImageDraftsRef.current.forEach(revokeProductImageDraft);
+    };
+  }, []);
 
   const filteredUsers = useMemo(() => {
     const term = userSearch.trim().toLowerCase();
@@ -1577,7 +1934,76 @@ export default function AdminDashboardPage() {
   }, [supplierSearch, suppliers]);
 
   const dbTableItems = useMemo(() => dbStatus?.tables.items ?? [], [dbStatus]);
+  const dbSchemaItems = useMemo(
+    () =>
+      [...new Set(dbTableItems.map((item) => item.tableName.split(".")[0]).filter(Boolean))].sort(
+        (a, b) => a.localeCompare(b),
+      ),
+    [dbTableItems],
+  );
+  const backupSelectableTables = useMemo(
+    () =>
+      selectedBackupSchema
+        ? dbTableItems.filter((item) => item.tableName.startsWith(`${selectedBackupSchema}.`))
+        : dbTableItems,
+    [dbTableItems, selectedBackupSchema],
+  );
+  const maintenanceSelectableTables = useMemo(
+    () =>
+      maintenanceForm.schemaName
+        ? dbTableItems.filter((item) =>
+            item.tableName.startsWith(`${maintenanceForm.schemaName}.`),
+          )
+        : dbTableItems,
+    [dbTableItems, maintenanceForm.schemaName],
+  );
+  const maintenanceScheduleSelectableTables = useMemo(
+    () =>
+      maintenanceScheduleForm.schemaName
+        ? dbTableItems.filter((item) =>
+            item.tableName.startsWith(`${maintenanceScheduleForm.schemaName}.`),
+          )
+        : dbTableItems,
+    [dbTableItems, maintenanceScheduleForm.schemaName],
+  );
   const heaviestDbTable = dbTableItems[0] ?? null;
+  const dbTopQueriedTables = useMemo(() => dbStatus?.tables.topQueried ?? [], [dbStatus]);
+  const dbIndexItems = useMemo(() => dbStatus?.indexes ?? [], [dbStatus]);
+  const dbConnectionItems = useMemo(() => dbStatus?.connections.items ?? [], [dbStatus]);
+  const dbUsers = useMemo(() => dbStatus?.users ?? [], [dbStatus]);
+  const catalogTableNames = useMemo(
+    () =>
+      new Set([
+        "catalog.products",
+        "catalog.brands",
+        "catalog.classifications",
+        "management.suppliers",
+        "management.promotions",
+        "management.reviews",
+      ]),
+    [],
+  );
+  const catalogIndexItems = useMemo(
+    () => dbIndexItems.filter((item) => catalogTableNames.has(item.tableName)),
+    [catalogTableNames, dbIndexItems],
+  );
+  const maxTopTableQueries = useMemo(
+    () => Math.max(...dbTopQueriedTables.map((item) => item.totalQueries), 1),
+    [dbTopQueriedTables],
+  );
+  const maxIndexScans = useMemo(
+    () => Math.max(...catalogIndexItems.map((item) => item.scans), 1),
+    [catalogIndexItems],
+  );
+  const maxUserConnections = useMemo(
+    () => Math.max(...dbUsers.map((item) => item.totalConnections), 1),
+    [dbUsers],
+  );
+  const inactiveDbConnections =
+    (dbStatus?.connections.idle ?? 0) +
+    (dbStatus?.connections.idleInTransaction ?? 0) +
+    (dbStatus?.connections.other ?? 0);
+  const totalDbConnections = dbStatus?.connections.total ?? 0;
   const activeSessions = useMemo<ActiveUserSession[]>(
     () => authSecurityOverview?.activeSessions ?? [],
     [authSecurityOverview],
@@ -1586,32 +2012,54 @@ export default function AdminDashboardPage() {
     () => authSecurityOverview?.loginAttempts ?? [],
     [authSecurityOverview],
   );
-  const visibleActiveSessions = useMemo(
-    () => activeSessions.slice(0, 3),
-    [activeSessions],
-  );
-  const visibleLoginAuditItems = useMemo(
-    () => loginAuditItems.slice(0, 3),
-    [loginAuditItems],
-  );
+  const visibleActiveSessions = useMemo(() => activeSessions.slice(0, 4), [activeSessions]);
+  const visibleLoginAuditItems = useMemo(() => loginAuditItems.slice(0, 6), [loginAuditItems]);
   const securitySummary = authSecurityOverview?.summary ?? null;
+  const activeConnectionRatio =
+    totalDbConnections > 0 ? (dbStatus?.connections.active ?? 0) / totalDbConnections : 0;
+  const internalConnectionRatio =
+    totalDbConnections > 0 ? (dbStatus?.connections.internal ?? 0) / totalDbConnections : 0;
+  const connectionDonutBackground =
+    totalDbConnections > 0
+      ? `conic-gradient(
+          #1f9d73 0deg ${activeConnectionRatio * 360}deg,
+          #f2b035 ${activeConnectionRatio * 360}deg ${(activeConnectionRatio + internalConnectionRatio) * 360}deg,
+          #d6dce5 ${(activeConnectionRatio + internalConnectionRatio) * 360}deg 360deg
+        )`
+      : "conic-gradient(#d6dce5 0deg 360deg)";
 
   useEffect(() => {
     if (dbTableItems.length === 0) {
+      if (selectedBackupSchema) {
+        setSelectedBackupSchema("");
+      }
       if (selectedBackupTable) {
         setSelectedBackupTable("");
       }
       return;
     }
 
-    const isCurrentTableAvailable = dbTableItems.some(
+    if (
+      selectedBackupSchema &&
+      !dbSchemaItems.includes(selectedBackupSchema)
+    ) {
+      setSelectedBackupSchema("");
+    }
+
+    const isCurrentTableAvailable = backupSelectableTables.some(
       (item) => item.tableName === selectedBackupTable,
     );
 
     if (!isCurrentTableAvailable) {
-      setSelectedBackupTable(dbTableItems[0]?.tableName ?? "");
+      setSelectedBackupTable(backupSelectableTables[0]?.tableName ?? "");
     }
-  }, [dbTableItems, selectedBackupTable]);
+  }, [
+    backupSelectableTables,
+    dbSchemaItems,
+    dbTableItems.length,
+    selectedBackupSchema,
+    selectedBackupTable,
+  ]);
 
   useEffect(() => {
     if (!backupSchedule) {
@@ -1624,8 +2072,45 @@ export default function AdminDashboardPage() {
       everyDays: String(backupSchedule.everyDays),
       runAtTime: backupSchedule.runAtTime,
       retentionDays: String(backupSchedule.retentionDays),
+      schemaName: backupSchedule.schemaName ?? "",
     });
   }, [backupSchedule]);
+
+  useEffect(() => {
+    if (!maintenanceSchedule) {
+      setMaintenanceScheduleForm(defaultMaintenanceScheduleForm);
+      return;
+    }
+
+    setMaintenanceScheduleForm({
+      enabled: maintenanceSchedule.enabled,
+      everyDays: String(maintenanceSchedule.everyDays),
+      runAtTime: maintenanceSchedule.runAtTime,
+      operation: maintenanceSchedule.operation,
+      schemaName: maintenanceSchedule.schemaName ?? "",
+      tableName: maintenanceSchedule.tableName ?? "",
+    });
+  }, [maintenanceSchedule]);
+
+  useEffect(() => {
+    if (
+      maintenanceForm.tableName &&
+      maintenanceForm.schemaName &&
+      !maintenanceForm.tableName.startsWith(`${maintenanceForm.schemaName}.`)
+    ) {
+      setMaintenanceForm((prev) => ({ ...prev, tableName: "" }));
+    }
+  }, [maintenanceForm.schemaName, maintenanceForm.tableName]);
+
+  useEffect(() => {
+    if (
+      maintenanceScheduleForm.tableName &&
+      maintenanceScheduleForm.schemaName &&
+      !maintenanceScheduleForm.tableName.startsWith(`${maintenanceScheduleForm.schemaName}.`)
+    ) {
+      setMaintenanceScheduleForm((prev) => ({ ...prev, tableName: "" }));
+    }
+  }, [maintenanceScheduleForm.schemaName, maintenanceScheduleForm.tableName]);
 
   useEffect(() => {
     if (userPage > totalUserPages) {
@@ -1846,6 +2331,24 @@ export default function AdminDashboardPage() {
     }
   }, [handleSessionError]);
 
+  const loadMaintenanceSchedule = useCallback(async () => {
+    try {
+      setLoadingMaintenanceSchedule(true);
+      const result = await getMaintenanceSchedule();
+      setMaintenanceSchedule(result.schedule);
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "No se pudo cargar la programacion de mantenimiento";
+      if (!handleSessionError(message)) {
+        setNotice({ type: "error", text: message });
+      }
+    } finally {
+      setLoadingMaintenanceSchedule(false);
+    }
+  }, [handleSessionError]);
+
   const loadAuthSecurityData = useCallback(async () => {
     try {
       setLoadingAuthSecurityOverview(true);
@@ -1888,11 +2391,13 @@ export default function AdminDashboardPage() {
     void loadDatabaseStats();
     void loadBackupRecords();
     void loadBackupSchedule();
+    void loadMaintenanceSchedule();
     void loadAuthSecurityData();
   }, [
     loadAuthSecurityData,
     loadBackupRecords,
     loadBackupSchedule,
+    loadMaintenanceSchedule,
     loadDashboard,
     loadDatabaseStats,
     loading,
@@ -1902,15 +2407,29 @@ export default function AdminDashboardPage() {
   ]);
 
   useEffect(() => {
-    if (section !== "dbMonitoring" || !user) {
+    if (
+      (section !== "dbMonitoring" &&
+        section !== "backupManagement" &&
+        section !== "automation") ||
+      !user
+    ) {
       return;
     }
 
     void loadDatabaseStats();
     void loadBackupRecords();
     void loadBackupSchedule();
+    void loadMaintenanceSchedule();
     void loadAuthSecurityData();
-  }, [loadAuthSecurityData, loadBackupRecords, loadBackupSchedule, loadDatabaseStats, section, user]);
+  }, [
+    loadAuthSecurityData,
+    loadBackupRecords,
+    loadBackupSchedule,
+    loadDatabaseStats,
+    loadMaintenanceSchedule,
+    section,
+    user,
+  ]);
 
   const onUserInput = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -2049,9 +2568,169 @@ export default function AdminDashboardPage() {
     setProductForm((prev) => ({ ...prev, [name]: value }));
   };
 
+  const clearProductImageFiles = useCallback(() => {
+    setProductImageFiles((prev) => {
+      prev.forEach((item) => {
+        revokeProductImageDraft(item);
+      });
+      return [];
+    });
+    if (productImageFileInputRef.current) {
+      productImageFileInputRef.current.value = "";
+    }
+  }, []);
+
+  const clearPendingProductImageDrafts = useCallback(() => {
+    setPendingProductImageDrafts((prev) => {
+      prev.forEach(revokeProductImageDraft);
+      return [];
+    });
+    if (productImageFileInputRef.current) {
+      productImageFileInputRef.current.value = "";
+    }
+  }, []);
+
+  const clearProductImagesState = useCallback(() => {
+    setProductExistingImages([]);
+    setProductImageUrls([]);
+    setProductImageUrlInput("");
+    setActiveProductGalleryPreview(null);
+    clearPendingProductImageDrafts();
+    clearProductImageFiles();
+  }, [clearPendingProductImageDrafts, clearProductImageFiles]);
+
+  const addProductImageUrl = () => {
+    const normalized = productImageUrlInput.trim();
+    if (!normalized) {
+      return;
+    }
+
+    if (!isValidImageUrl(normalized)) {
+      setNotice({ type: "error", text: "La URL de imagen debe usar http o https." });
+      return;
+    }
+
+    const existingUrls = new Set([
+      ...productExistingImages.map((item) => item.imageUrl ?? ""),
+      ...productImageUrls,
+      ...pendingProductImageDrafts.map((item) => item.imageUrl ?? ""),
+    ]);
+
+    if (existingUrls.has(normalized)) {
+      setNotice({ type: "error", text: "Esa imagen ya esta agregada en la galeria." });
+      return;
+    }
+
+    if (
+      productExistingImages.length +
+        productImageUrls.length +
+        productImageFiles.length +
+        pendingProductImageDrafts.length >=
+      10
+    ) {
+      setNotice({ type: "error", text: "Solo puedes guardar hasta 10 imagenes por producto." });
+      return;
+    }
+
+    setPendingProductImageDrafts((prev) => [
+      ...prev,
+      {
+        previewUrl: normalized,
+        source: "url",
+        imageUrl: normalized,
+      },
+    ]);
+    setProductImageUrlInput("");
+    setNotice(null);
+  };
+
+  const onProductImageFilesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = Array.from(e.target.files ?? []);
+    if (selectedFiles.length === 0) {
+      return;
+    }
+
+    const currentTotal =
+      productExistingImages.length +
+      productImageUrls.length +
+      productImageFiles.length +
+      pendingProductImageDrafts.length;
+    if (currentTotal + selectedFiles.length > 10) {
+      e.target.value = "";
+      setNotice({ type: "error", text: "Solo puedes guardar hasta 10 imagenes por producto." });
+      return;
+    }
+
+    const invalidFile = selectedFiles.find((file) => !file.type.startsWith("image/"));
+    if (invalidFile) {
+      e.target.value = "";
+      setNotice({ type: "error", text: "Solo puedes seleccionar archivos de imagen." });
+      return;
+    }
+
+    const oversized = selectedFiles.find((file) => file.size > 8 * 1024 * 1024);
+    if (oversized) {
+      e.target.value = "";
+      setNotice({ type: "error", text: "Cada imagen debe pesar maximo 8 MB." });
+      return;
+    }
+
+    const nextFiles = selectedFiles.map((file) => ({
+      previewUrl: URL.createObjectURL(file),
+      source: "file" as const,
+      file,
+    }));
+
+    setPendingProductImageDrafts((prev) => [...prev, ...nextFiles]);
+    setNotice(null);
+    e.target.value = "";
+  };
+
+  const acceptPendingProductImage = () => {
+    const currentDraft = pendingProductImageDrafts[0];
+    if (!currentDraft) {
+      return;
+    }
+
+    if (currentDraft.source === "url" && currentDraft.imageUrl) {
+      setProductImageUrls((prev) => [...prev, currentDraft.imageUrl as string]);
+    }
+
+    if (currentDraft.source === "file" && currentDraft.file) {
+      setProductImageFiles((prev) => [...prev, currentDraft]);
+    }
+
+    setActiveProductGalleryPreview(currentDraft.previewUrl);
+    setPendingProductImageDrafts((prev) => prev.slice(1));
+    setNotice(null);
+  };
+
+  const cancelPendingProductImages = () => {
+    clearPendingProductImageDrafts();
+  };
+
   const resetProductForm = () => {
     setProductForm(defaultProductForm);
     setEditingProductId(null);
+    clearProductImagesState();
+  };
+
+  const removeExistingProductImage = (id: number) => {
+    setProductExistingImages((prev) => prev.filter((item) => item.id !== id));
+  };
+
+  const removeProductImageUrl = (imageUrl: string) => {
+    setProductImageUrls((prev) => prev.filter((item) => item !== imageUrl));
+  };
+
+  const removeProductImageFile = (previewUrl: string) => {
+    setProductImageFiles((prev) => {
+      const target = prev.find((item) => item.previewUrl === previewUrl);
+      if (target) {
+        revokeProductImageDraft(target);
+      }
+      return prev.filter((item) => item.previewUrl !== previewUrl);
+    });
   };
 
   const submitProduct = async (e: React.FormEvent) => {
@@ -2076,13 +2755,22 @@ export default function AdminDashboardPage() {
       tipoAdquisicion: productForm.tipoAdquisicion,
       requiereReceta: productForm.requiereReceta,
       activo: productForm.activo,
+      imageUrls: productImageUrls,
+      imageFiles: productImageFiles
+        .map((item) => item.file)
+        .filter((file): file is File => Boolean(file)),
     };
 
     try {
       setSavingProduct(true);
 
       if (editingProductId) {
-        const result = await updateProduct( editingProductId, payload);
+        const result = await updateProduct(editingProductId, {
+          ...payload,
+          keepImageIds: productExistingImages
+            .map((item) => item.id)
+            .filter((id): id is number => typeof id === "number"),
+        });
         setProducts((prev) =>
           prev.map((item) =>
             item.id === editingProductId ? result.product : item,
@@ -2109,6 +2797,7 @@ export default function AdminDashboardPage() {
   };
 
   const editProduct = (item: AdminProduct) => {
+    clearProductImagesState();
     setEditingProductId(item.id);
     setProductForm({
       nombre: item.nombre,
@@ -2123,6 +2812,15 @@ export default function AdminDashboardPage() {
       requiereReceta: item.requiereReceta,
       activo: item.activo,
     });
+    setProductExistingImages(
+      item.images.map((image) => ({
+        id: image.id,
+        imageUrl: image.imageUrl,
+        previewUrl: image.imageUrl,
+        source: "existing",
+        createdAt: image.createdAt,
+      })),
+    );
     setSection("products");
   };
 
@@ -2978,11 +3676,19 @@ export default function AdminDashboardPage() {
 
     try {
       setGeneratingBackup(true);
+      setBackupLogModal(buildPendingBackupLogModal());
       const result = await createDatabaseBackupRecord();
       setBackupRecords((prev) => [result.backup, ...prev]);
       setBackupPage(1);
       void loadDatabaseStats();
-      toast.success(`Respaldo creado: ${result.backup.fileName}`);
+      setBackupLogModal(
+        buildBackupLogModal({
+          backup: result.backup,
+          message: result.message,
+          logText: result.logText,
+          provider: dbStatus?.backup.provider,
+        }),
+      );
     } catch (error) {
       const message =
         error instanceof Error
@@ -2991,6 +3697,7 @@ export default function AdminDashboardPage() {
       if (!handleSessionError(message)) {
         toast.error(message);
       }
+      setBackupLogModal(null);
     } finally {
       setGeneratingBackup(false);
     }
@@ -3006,11 +3713,21 @@ export default function AdminDashboardPage() {
 
     try {
       setGeneratingTableBackup(true);
-      const result = await createSingleTableDatabaseBackupRecord( selectedBackupTable);
+      setBackupLogModal(buildPendingBackupLogModal(selectedBackupTable));
+      const result = await createSingleTableDatabaseBackupRecord(selectedBackupTable);
       setBackupRecords((prev) => [result.backup, ...prev]);
       setBackupPage(1);
       void loadDatabaseStats();
-      toast.success(`Respaldo de tabla creado: ${result.backup.fileName}`);
+      setBackupLogModal(
+        buildBackupLogModal({
+          backup: result.backup,
+          message: result.message,
+          logText: result.logText,
+          provider: dbStatus?.backup.provider,
+          tableName: selectedBackupTable,
+          scopeLabel: selectedBackupTable,
+        }),
+      );
     } catch (error) {
       const message =
         error instanceof Error
@@ -3019,9 +3736,126 @@ export default function AdminDashboardPage() {
       if (!handleSessionError(message)) {
         toast.error(message);
       }
+      setBackupLogModal(null);
     } finally {
       setGeneratingTableBackup(false);
     }
+  };
+
+  const generateSingleSchemaBackup = async () => {
+    if (!user) return;
+
+    if (!selectedBackupSchema) {
+      toast.error("Selecciona un esquema para generar el respaldo.");
+      return;
+    }
+
+    try {
+      setGeneratingTableBackup(true);
+      setBackupLogModal(buildPendingBackupLogModal(selectedBackupSchema));
+      const result = await createSingleSchemaDatabaseBackupRecord(selectedBackupSchema);
+      setBackupRecords((prev) => [result.backup, ...prev]);
+      setBackupPage(1);
+      void loadDatabaseStats();
+      setBackupLogModal(
+        buildBackupLogModal({
+          backup: result.backup,
+          message: result.message,
+          logText: result.logText,
+          provider: dbStatus?.backup.provider,
+          scopeLabel: selectedBackupSchema,
+        }),
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "No se pudo generar el respaldo del esquema seleccionado";
+      if (!handleSessionError(message)) {
+        toast.error(message);
+      }
+      setBackupLogModal(null);
+    } finally {
+      setGeneratingTableBackup(false);
+    }
+  };
+
+  const executeMaintenance = async () => {
+    if (!user) return;
+
+    const schemaName = maintenanceForm.schemaName.trim() || undefined;
+    const tableName = maintenanceForm.tableName.trim() || undefined;
+
+    try {
+      setRunningMaintenance(true);
+      setBackupLogModal(
+        buildMaintenancePendingLogModal({
+          operation: maintenanceForm.operation,
+          tableName: tableName ?? schemaName,
+        }),
+      );
+
+      const result = await runMaintenance({
+        operation: maintenanceForm.operation,
+        schemaName: schemaName ?? null,
+        tableName: tableName ?? null,
+      });
+
+      setBackupLogModal(buildMaintenanceSuccessLogModal(result));
+      void loadDatabaseStats();
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "No se pudo ejecutar el mantenimiento de PostgreSQL";
+
+      if (handleSessionError(message)) {
+        setBackupLogModal(null);
+        return;
+      }
+
+      const payload =
+        error && typeof error === "object" && "payload" in error
+          ? (error as { payload?: Record<string, unknown> }).payload
+          : undefined;
+      const nestedMessage =
+        payload?.message && typeof payload.message === "object"
+          ? (payload.message as Record<string, unknown>)
+          : undefined;
+      const logText =
+        typeof payload?.logText === "string"
+          ? payload.logText
+          : typeof nestedMessage?.logText === "string"
+            ? nestedMessage.logText
+            : undefined;
+
+      setBackupLogModal(
+        buildMaintenanceErrorLogModal({
+          operation: maintenanceForm.operation,
+          tableName: tableName ?? schemaName,
+          message,
+          logText,
+        }),
+      );
+    } finally {
+      setRunningMaintenance(false);
+    }
+  };
+
+  const confirmMaintenanceRun = () => {
+    const operationLabel = formatMaintenanceOperationLabel(maintenanceForm.operation);
+    const tableLabel = maintenanceForm.tableName
+      ? `sobre la tabla ${formatTableName(maintenanceForm.tableName)}`
+      : maintenanceForm.schemaName
+        ? `sobre el esquema ${formatTableName(maintenanceForm.schemaName)}`
+      : "sobre toda la base de datos";
+
+    requestConfirmation({
+      title: "Confirmar mantenimiento PostgreSQL",
+      description: `Se ejecutara ${operationLabel} ${tableLabel}. VACUUM FULL no esta permitido y el proceso puede tardar algunos minutos.`,
+      confirmLabel: "Ejecutar mantenimiento",
+      onConfirm: () => executeMaintenance(),
+    });
   };
 
   const downloadBackupRecord = async (backup: DatabaseBackupRecord) => {
@@ -3113,6 +3947,7 @@ export default function AdminDashboardPage() {
         everyDays: Number(backupScheduleForm.everyDays),
         runAtTime: backupScheduleForm.runAtTime.trim(),
         retentionDays: Number(backupScheduleForm.retentionDays),
+        schemaName: backupScheduleForm.schemaName.trim() || null,
       });
       setBackupSchedule(result.schedule);
       setNotice({
@@ -3145,6 +3980,7 @@ export default function AdminDashboardPage() {
       everyDays: String(backupSchedule.everyDays),
       runAtTime: backupSchedule.runAtTime,
       retentionDays: String(backupSchedule.retentionDays),
+      schemaName: backupSchedule.schemaName ?? "",
     });
     setNotice({ type: "success", text: "Registro de programacion cargado para edicion." });
   }, [backupSchedule]);
@@ -3173,6 +4009,89 @@ export default function AdminDashboardPage() {
     }
   };
 
+  const saveMaintenanceSchedule = async () => {
+    if (!user) return;
+
+    const validationError = validateMaintenanceScheduleForm(maintenanceScheduleForm);
+    if (validationError) {
+      setNotice({ type: "error", text: validationError });
+      return;
+    }
+
+    try {
+      setSavingMaintenanceSchedule(true);
+      const result = await updateMaintenanceSchedule({
+        enabled: maintenanceScheduleForm.enabled,
+        everyDays: Number(maintenanceScheduleForm.everyDays),
+        runAtTime: maintenanceScheduleForm.runAtTime.trim(),
+        operation: maintenanceScheduleForm.operation,
+        schemaName: maintenanceScheduleForm.schemaName.trim() || null,
+        tableName: maintenanceScheduleForm.tableName.trim() || null,
+      });
+      setMaintenanceSchedule(result.schedule);
+      setNotice({
+        type: "success",
+        text:
+          result.message ||
+          "La programacion automatica de mantenimiento se actualizo correctamente.",
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "No se pudo guardar la programacion automatica de mantenimiento";
+      if (!handleSessionError(message)) {
+        setNotice({ type: "error", text: message });
+      }
+    } finally {
+      setSavingMaintenanceSchedule(false);
+    }
+  };
+
+  const loadMaintenanceScheduleIntoForm = useCallback(() => {
+    if (!maintenanceSchedule) {
+      setMaintenanceScheduleForm(defaultMaintenanceScheduleForm);
+      return;
+    }
+
+    setMaintenanceScheduleForm({
+      enabled: maintenanceSchedule.enabled,
+      everyDays: String(maintenanceSchedule.everyDays),
+      runAtTime: maintenanceSchedule.runAtTime,
+      operation: maintenanceSchedule.operation,
+      schemaName: maintenanceSchedule.schemaName ?? "",
+      tableName: maintenanceSchedule.tableName ?? "",
+    });
+    setNotice({
+      type: "success",
+      text: "Registro de mantenimiento cargado para edicion.",
+    });
+  }, [maintenanceSchedule]);
+
+  const removeMaintenanceSchedule = async () => {
+    if (!user) return;
+
+    try {
+      setSavingMaintenanceSchedule(true);
+      const result = await deleteMaintenanceSchedule();
+      setMaintenanceSchedule(result.schedule);
+      setNotice({
+        type: "success",
+        text: result.message || "La programacion automatica de mantenimiento fue eliminada.",
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "No se pudo eliminar la programacion automatica de mantenimiento";
+      if (!handleSessionError(message)) {
+        setNotice({ type: "error", text: message });
+      }
+    } finally {
+      setSavingMaintenanceSchedule(false);
+    }
+  };
+
   const refreshAdminData = async () => {
     if (!user) return;
 
@@ -3181,6 +4100,7 @@ export default function AdminDashboardPage() {
       loadDatabaseStats(),
       loadBackupRecords(),
       loadBackupSchedule(),
+      loadMaintenanceSchedule(),
       loadAuthSecurityData(),
     ]);
   };
@@ -3272,6 +4192,20 @@ export default function AdminDashboardPage() {
             type="button"
           >
             Monitoreo de la base de datos
+          </button>
+          <button
+            className={section === "backupManagement" ? styles.active : ""}
+            onClick={() => setSection("backupManagement")}
+            type="button"
+          >
+            Gestion de respaldos
+          </button>
+          <button
+            className={section === "automation" ? styles.active : ""}
+            onClick={() => setSection("automation")}
+            type="button"
+          >
+            Automatizacion
           </button>
           <button
             className={section === "extras" ? styles.active : ""}
@@ -3654,6 +4588,119 @@ export default function AdminDashboardPage() {
                     <span>Requiere receta</span>
                   </label>
                 </div>
+                <section className={styles.productImagesPanel}>
+                  <div className={styles.productImagesHeader}>
+                    <div>
+                      <strong>Galeria de imagenes</strong>
+                      <p>Agrega imagenes por URL o desde tu ordenador. Cada una se confirma antes de entrar a la galeria.</p>
+                    </div>
+                    <span>
+                      {productExistingImages.length +
+                        productImageUrls.length +
+                        productImageFiles.length}
+                      /10
+                    </span>
+                  </div>
+
+                  <div className={styles.productImageUrlRow}>
+                    <input
+                      name="productImageUrlInput"
+                      placeholder="https://ejemplo.com/imagen.jpg"
+                      value={productImageUrlInput}
+                      onChange={(e) => setProductImageUrlInput(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className={styles.ghostBtn}
+                      onClick={addProductImageUrl}
+                    >
+                      Agregar URL
+                    </button>
+                  </div>
+
+                  <div className={styles.productFileActions}>
+                    <input
+                      ref={productImageFileInputRef}
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={onProductImageFilesChange}
+                    />
+                    <p>
+                      Puedes subir imagenes desde tu ordenador o agregarlas con URL.
+                      En edicion, conservar imagenes es opcional.
+                    </p>
+                  </div>
+
+                  <div className={styles.productImageGallery}>
+                    <div className={styles.productImageColumn}>
+                      {productGalleryImages.length > 0 ? (
+                        productGalleryImages.map((image, index) => (
+                          <article
+                            key={`${image.source}-${image.id ?? image.previewUrl}`}
+                            className={`${styles.productImageThumbCard} ${
+                              activeProductGalleryPreview === image.previewUrl
+                                ? styles.productImageThumbCardActive
+                                : ""
+                            }`}
+                          >
+                            <button
+                              type="button"
+                              className={styles.productImageThumbButton}
+                              onClick={() => setActiveProductGalleryPreview(image.previewUrl)}
+                            >
+                              <img
+                                src={image.previewUrl}
+                                alt={`Vista previa ${index + 1} del producto`}
+                              />
+                            </button>
+                            <div className={styles.productImageThumbMeta}>
+                              <span>
+                                {image.source === "existing"
+                                  ? "Actual"
+                                  : image.source === "url"
+                                    ? "URL"
+                                    : "Archivo"}
+                              </span>
+                              <button
+                                type="button"
+                                className={styles.productImageRemoveBtn}
+                                onClick={() =>
+                                  image.source === "existing" && typeof image.id === "number"
+                                    ? removeExistingProductImage(image.id)
+                                    : image.source === "url" && image.imageUrl
+                                      ? removeProductImageUrl(image.imageUrl)
+                                      : removeProductImageFile(image.previewUrl)
+                                }
+                              >
+                                Quitar
+                              </button>
+                            </div>
+                          </article>
+                        ))
+                      ) : (
+                        <div className={styles.productImageEmptyState}>
+                          <strong>Sin imagenes todavia</strong>
+                          <span>Cuando aceptes una imagen, aparecera aqui como miniatura.</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className={styles.productImageStage}>
+                      {activeProductGalleryPreview ? (
+                        <img
+                          src={activeProductGalleryPreview}
+                          alt="Vista previa principal de la galeria"
+                        />
+                      ) : (
+                        <div className={styles.productImageStagePlaceholder}>
+                          <strong>Vista previa principal</strong>
+                          <span>Selecciona o agrega una imagen para verla aqui en grande.</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </section>
               </form>
             ) : null}
 
@@ -5482,25 +6529,11 @@ export default function AdminDashboardPage() {
                 type="button"
                 className={styles.ghostBtn}
                 onClick={() =>
-                  void (user &&
-                    Promise.all([
-                      loadAuthSecurityData(),
-                      loadDatabaseStats(),
-                      loadBackupRecords(),
-                      loadBackupSchedule(),
-                    ]))
+                  void (user && Promise.all([loadDatabaseStats(), loadAuthSecurityData()]))
                 }
-                disabled={
-                  loadingAuthSecurityOverview ||
-                  loadingDbStatus ||
-                  loadingBackupRecords ||
-                  loadingBackupSchedule
-                }
+                disabled={loadingDbStatus || loadingAuthSecurityOverview}
               >
-                {loadingAuthSecurityOverview ||
-                loadingDbStatus ||
-                loadingBackupRecords ||
-                loadingBackupSchedule
+                {loadingDbStatus || loadingAuthSecurityOverview
                   ? "Actualizando..."
                   : "Actualizar estado"}
               </button>
@@ -5534,6 +6567,52 @@ export default function AdminDashboardPage() {
               </div>
             </div>
 
+            {false && <div className={styles.monitorGrid}>
+              <article className={styles.monitorCard}>
+                <h3>Estado</h3>
+                <strong className={dbStatus?.isOnline ? styles.stateOk : styles.stateWarn}>
+                  {dbStatus?.isOnline ? "Conectada" : "Sin datos"}
+                </strong>
+                <span>Servicio: {dbStatus?.isOnline ? "Disponible" : "Sin datos"}</span>
+              </article>
+
+              <article className={styles.monitorCard}>
+                <h3>Tiempo transcurrido</h3>
+                <strong>{formatElapsedTime(dbStatus?.databaseAgeSeconds ?? 0)}</strong>
+                <span>
+                  Desde{" "}
+                  {dbStatus?.initializedAt
+                    ? new Date(dbStatus?.initializedAt ?? "").toLocaleString("es-MX")
+                    : "la inicializacion registrada"}
+                </span>
+              </article>
+
+              <article className={styles.monitorCard}>
+                <h3>Indices detectados</h3>
+                <strong>{formatNumber(dbStatus?.overview.totalIndexes ?? 0)}</strong>
+                <span>
+                  Ratio actual:{" "}
+                  {dbStatus?.overview.totalTables
+                    ? `${(
+                        (dbStatus?.overview.totalIndexes ?? 0) /
+                        (dbStatus?.overview.totalTables ?? 1)
+                      ).toFixed(1)} por tabla`
+                    : "Sin datos"}
+                </span>
+              </article>
+
+              <article className={styles.monitorCard}>
+                <h3>Usuarios de BD</h3>
+                <strong>{formatNumber(dbUsers.length)}</strong>
+                <span>
+                  Con actividad:{" "}
+                  {formatNumber(
+                    dbUsers.filter((item) => item.activeConnections > 0).length,
+                  )}
+                </span>
+              </article>
+            </div>}
+
             <div className={styles.monitorGrid}>
               <article className={styles.monitorCard}>
                 <h3>Estado</h3>
@@ -5544,24 +6623,39 @@ export default function AdminDashboardPage() {
               </article>
 
               <article className={styles.monitorCard}>
-                <h3>Tamaño y uptime</h3>
-                <strong>{dbStatus?.sizePretty ?? "Sin datos"}</strong>
-                <span>Uptime: {formatUptime(dbStatus?.uptimeSeconds ?? 0)}</span>
-              </article>
-
-              <article className={styles.monitorCard}>
-                <h3>Conexiones</h3>
-                <strong>{formatNumber(dbStatus?.connections.total ?? 0)}</strong>
+                <h3>Tiempo transcurrido</h3>
+                <strong>{formatElapsedTime(dbStatus?.databaseAgeSeconds ?? 0)}</strong>
                 <span>
-                  Activas: {formatNumber(dbStatus?.connections.active ?? 0)} | Idle:{" "}
-                  {formatNumber(dbStatus?.connections.idle ?? 0)}
+                  Desde{" "}
+                  {dbStatus?.initializedAt
+                    ? new Date(dbStatus.initializedAt).toLocaleString("es-MX")
+                    : "la inicializacion registrada"}
                 </span>
               </article>
 
               <article className={styles.monitorCard}>
-                <h3>Transacciones</h3>
-                <strong>{formatNumber(dbStatus?.transactions.commits ?? 0)}</strong>
-                <span>Rollbacks: {formatNumber(dbStatus?.transactions.rollbacks ?? 0)}</span>
+                <h3>Indices detectados</h3>
+                <strong>{formatNumber(dbStatus?.overview.totalIndexes ?? 0)}</strong>
+                <span>
+                  Ratio actual:{" "}
+                  {dbStatus?.overview.totalTables
+                    ? `${(
+                        (dbStatus?.overview.totalIndexes ?? 0) /
+                        (dbStatus?.overview.totalTables ?? 1)
+                      ).toFixed(1)} por tabla`
+                    : "Sin datos"}
+                </span>
+              </article>
+
+              <article className={styles.monitorCard}>
+                <h3>Usuarios de BD</h3>
+                <strong>{formatNumber(dbUsers.length)}</strong>
+                <span>
+                  Con actividad:{" "}
+                  {formatNumber(
+                    dbUsers.filter((item) => item.activeConnections > 0).length,
+                  )}
+                </span>
               </article>
             </div>
 
@@ -5575,11 +6669,347 @@ export default function AdminDashboardPage() {
               <p>
                 <strong>Tabla principal:</strong>{" "}
                 {heaviestDbTable
-                  ? `${formatTableName(heaviestDbTable.tableName)} (${heaviestDbTable.sizePretty})`
+                  ? `${formatTableName(heaviestDbTable.tableName)} (${heaviestDbTable.totalSizePretty})`
                   : "Sin datos"}
               </p>
             </div>
 
+            <div className={styles.analyticsGrid}>
+              <div className={`${styles.analyticsPanel} ${styles.analyticsPanelFull}`}>
+                <div className={styles.analyticsPanelHeader}>
+                  <div>
+                    <h3>Estadisticas de tablas</h3>
+                    <p>Metricas de rendimiento y almacenamiento por tabla.</p>
+                  </div>
+                  <span className={styles.analyticsStamp}>
+                    {dbStatus
+                      ? `Actualizado ${new Date(dbStatus.checkedAt).toLocaleTimeString("es-MX")}`
+                      : "Sin datos"}
+                  </span>
+                </div>
+
+                <div className={styles.analyticsSummaryGrid}>
+                  <article className={styles.analyticsMetricCard}>
+                    <span>Total tablas</span>
+                    <strong>{formatNumber(dbStatus?.overview.totalTables ?? 0)}</strong>
+                  </article>
+                  <article className={styles.analyticsMetricCard}>
+                    <span>Total indices</span>
+                    <strong>{formatNumber(dbStatus?.overview.totalIndexes ?? 0)}</strong>
+                  </article>
+                  <article className={styles.analyticsMetricCard}>
+                    <span>Tamaño total</span>
+                    <strong>{dbStatus?.overview.totalSizePretty ?? "0 B"}</strong>
+                  </article>
+                </div>
+
+                {dbTopQueriedTables.length === 0 ? (
+                  <p className={styles.tableInsightsEmpty}>
+                    Sin estadisticas de tablas por el momento.
+                  </p>
+                ) : (
+                  <div className={styles.chartCard}>
+                    <div className={styles.chartCardHeader}>
+                      <h4>Top tablas mas consultadas</h4>
+                      <span>Consultas secuenciales + por indice</span>
+                    </div>
+                    <div className={styles.chartBars}>
+                      {dbTopQueriedTables.map((table) => (
+                        <article key={table.tableName} className={styles.chartBarItem}>
+                          <div className={styles.chartBarMeta}>
+                            <div>
+                              <strong>{formatTableName(table.tableName)}</strong>
+                              <span>{table.tableName}</span>
+                            </div>
+                            <p>{formatNumber(table.totalQueries)} consultas</p>
+                          </div>
+                          <div className={styles.chartTrack}>
+                            <span
+                              className={styles.chartFillPrimary}
+                              style={{
+                                width: `${Math.max(
+                                  (table.totalQueries / maxTopTableQueries) * 100,
+                                  8,
+                                )}%`,
+                              }}
+                            />
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+            </div>
+
+            <div className={styles.tableInsights}>
+                <div className={styles.analyticsPanelHeader}>
+                  <div>
+                    <h3>Detalle de tablas</h3>
+                    <p>Consulta, tamaño de datos y cantidad de registros por tabla.</p>
+                  </div>
+                  <span className={styles.analyticsStamp}>
+                    {formatNumber(dbTableItems.length)} tablas
+                  </span>
+              </div>
+
+              {dbTableItems.length === 0 ? (
+                <p className={styles.tableInsightsEmpty}>Sin detalle de tablas disponible.</p>
+              ) : (
+                <div className={styles.monitorTableWrap}>
+                  <table className={styles.monitorTable}>
+                    <thead>
+                      <tr>
+                        <th>Tabla</th>
+                        <th>Tamaño total</th>
+                        <th>Datos</th>
+                        <th>Indices</th>
+                        <th>Consultas</th>
+                        <th>Registros</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dbTableItems.map((table) => (
+                        <tr key={table.tableName}>
+                          <td>
+                            <div className={styles.tableDetailCell}>
+                              <strong>{formatTableName(table.tableName)}</strong>
+                              <span>{table.tableName}</span>
+                            </div>
+                          </td>
+                          <td>{table.totalSizePretty}</td>
+                          <td>{table.tableSizePretty}</td>
+                          <td>{table.indexSizePretty}</td>
+                          <td>{formatNumber(table.totalQueries)}</td>
+                          <td>{formatNumber(table.rowCount)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            <div className={styles.analyticsGrid}>
+              <div className={styles.analyticsPanel}>
+                <div className={styles.analyticsPanelHeader}>
+                  <div>
+                    <h3>Conexiones activas</h3>
+                    <p>Resumen en tiempo real de las conexiones en PostgreSQL.</p>
+                  </div>
+                  <span className={styles.analyticsStamp}>
+                    Total {formatNumber(totalDbConnections)}
+                  </span>
+                </div>
+
+                <div className={styles.connectionPanel}>
+                  <div className={styles.connectionOverview}>
+                    <div
+                      className={styles.connectionDonut}
+                      style={{ background: connectionDonutBackground }}
+                    >
+                      <div className={styles.connectionDonutCenter}>
+                        <strong>{formatNumber(totalDbConnections)}</strong>
+                        <span>Conexiones</span>
+                      </div>
+                    </div>
+
+                    <div className={styles.connectionLegend}>
+                      <article>
+                        <span className={`${styles.legendDot} ${styles.legendActive}`} />
+                        <div>
+                          <strong>{formatNumber(dbStatus?.connections.active ?? 0)}</strong>
+                          <span>Activas</span>
+                        </div>
+                      </article>
+                      <article>
+                        <span className={`${styles.legendDot} ${styles.legendInternal}`} />
+                        <div>
+                          <strong>{formatNumber(dbStatus?.connections.internal ?? 0)}</strong>
+                          <span>Internas</span>
+                        </div>
+                      </article>
+                      <article>
+                        <span className={`${styles.legendDot} ${styles.legendIdle}`} />
+                        <div>
+                          <strong>{formatNumber(inactiveDbConnections)}</strong>
+                          <span>Inactivas</span>
+                        </div>
+                      </article>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+
+              <div className={styles.analyticsPanel}>
+                <div className={styles.analyticsPanelHeader}>
+                  <div>
+                    <h3>Usuarios</h3>
+                    <p>Usuarios de base de datos con conexiones abiertas.</p>
+                  </div>
+                  <span className={styles.analyticsStamp}>
+                    {formatNumber(dbUsers.length)} usuarios
+                  </span>
+                </div>
+
+                <div className={styles.analyticsSummaryGrid}>
+                  <article className={styles.analyticsMetricCard}>
+                    <span>Usuarios activos</span>
+                    <strong>
+                      {formatNumber(
+                        dbUsers.filter((item) => item.activeConnections > 0).length,
+                      )}
+                    </strong>
+                  </article>
+                  <article className={styles.analyticsMetricCard}>
+                    <span>Conexiones activas</span>
+                    <strong>{formatNumber(dbStatus?.connections.active ?? 0)}</strong>
+                  </article>
+                  <article className={styles.analyticsMetricCard}>
+                    <span>Conexiones internas</span>
+                    <strong>{formatNumber(dbStatus?.connections.internal ?? 0)}</strong>
+                  </article>
+                </div>
+
+                {dbUsers.length === 0 ? (
+                  <p className={styles.tableInsightsEmpty}>
+                    No hay usuarios con conexiones activas o registradas.
+                  </p>
+                ) : (
+                  <div className={styles.userBarList}>
+                    {dbUsers.map((item) => (
+                      <article key={item.userName} className={styles.userBarItem}>
+                        <div className={styles.userBarHeader}>
+                          <div className={styles.userBarIdentity}>
+                            <span className={styles.userAvatarMini}>
+                              {getInitialsFromName(item.userName)}
+                            </span>
+                            <div>
+                              <strong>{item.userName}</strong>
+                              <span>
+                                {formatNumber(item.activeConnections)} activas ·{" "}
+                                {formatNumber(item.internalConnections)} internas
+                              </span>
+                            </div>
+                          </div>
+                          <p>{formatNumber(item.totalConnections)} conexiones</p>
+                        </div>
+                        <div className={styles.chartTrack}>
+                          <span
+                            className={styles.chartFillDark}
+                            style={{
+                              width: `${Math.max(
+                                (item.totalConnections / maxUserConnections) * 100,
+                                10,
+                              )}%`,
+                            }}
+                          />
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className={styles.monitorAside}>
+              <div className={styles.sidePanel}>
+                <div className={styles.sidePanelHeader}>
+                  <div>
+                    <h3>Usuarios logeados</h3>
+                    <p>Sesiones activas detectadas en el sistema.</p>
+                  </div>
+                  <span className={styles.sidePanelBadge}>
+                    {formatNumber(securitySummary?.activeSessions ?? activeSessions.length)}
+                  </span>
+                </div>
+
+                {loadingAuthSecurityOverview && visibleActiveSessions.length === 0 ? (
+                  <p className={styles.tableInsightsEmpty}>Consultando sesiones activas...</p>
+                ) : visibleActiveSessions.length === 0 ? (
+                  <p className={styles.tableInsightsEmpty}>
+                    No hay sesiones activas registradas.
+                  </p>
+                ) : (
+                  <div className={styles.sessionList}>
+                    {visibleActiveSessions.map((session) => (
+                      <article key={session.sessionId} className={styles.sessionItem}>
+                        <div className={styles.sessionAvatar}>
+                          {getInitialsFromName(session.nombre)}
+                        </div>
+                        <div className={styles.sessionContent}>
+                          <div className={styles.sessionTop}>
+                            <strong>{session.nombre}</strong>
+                            <span className={styles.sessionRole}>
+                              {session.rol === "ADMIN" ? "Admin" : "Cliente"}
+                            </span>
+                          </div>
+                          <span>{session.correo}</span>
+                          <p>
+                            Activa desde {formatDateTime(session.createdAt)} ·{" "}
+                            {formatRelativeTime(session.lastSeenAt)}
+                          </p>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className={styles.sidePanel}>
+                <div className={styles.sidePanelHeader}>
+                  <div>
+                    <h3>Seguridad y auditoria</h3>
+                    <p>Usuario, exito o fallo y fecha del ultimo acceso.</p>
+                  </div>
+                  <span
+                    className={`${styles.auditCounter} ${
+                      (securitySummary?.failedAttempts ?? 0) > 0
+                        ? styles.auditCounterWarn
+                        : styles.auditCounterOk
+                    }`}
+                  >
+                    {formatNumber(securitySummary?.failedAttempts ?? 0)} fallidos
+                  </span>
+                </div>
+
+                {loadingAuthSecurityOverview && visibleLoginAuditItems.length === 0 ? (
+                  <p className={styles.tableInsightsEmpty}>Cargando auditoria...</p>
+                ) : visibleLoginAuditItems.length === 0 ? (
+                  <p className={styles.tableInsightsEmpty}>
+                    Sin eventos de inicio de sesion por el momento.
+                  </p>
+                ) : (
+                  <div className={styles.auditList}>
+                    {visibleLoginAuditItems.map((attempt) => (
+                      <article key={attempt.id} className={styles.auditItem}>
+                        <div className={styles.auditTop}>
+                          <div>
+                            <strong>{attempt.nombre}</strong>
+                            <span>{attempt.correo}</span>
+                          </div>
+                          <span
+                            className={`${styles.auditStatus} ${
+                              attempt.success ? styles.auditStatusOk : styles.auditStatusWarn
+                            }`}
+                          >
+                            {attempt.success ? "Exito" : "Fallido"}
+                          </span>
+                        </div>
+                        <div className={styles.auditMeta}>
+                          <span>{formatDateTime(attempt.attemptedAt)}</span>
+                          <small>{formatAuditReason(attempt.reason)}</small>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {false && (
             <div className={styles.monitoringColumns}>
               <div className={`${styles.tableInsights} ${styles.tableInsightsCompact}`}>
                 <div className={styles.tableInsightsHeader}>
@@ -5610,7 +7040,7 @@ export default function AdminDashboardPage() {
                           </div>
                         </div>
                         <p>{formatNumber(table.rowCount)}</p>
-                        <p>{table.sizePretty}</p>
+                        <p>{table.totalSizePretty}</p>
                       </article>
                     ))}
                   </div>
@@ -5712,6 +7142,32 @@ export default function AdminDashboardPage() {
                 </div>
               </div>
             </div>
+            )}
+          </section>
+        ) : null}
+
+        {section === "backupManagement" ? (
+          <section className={styles.section}>
+            <div className={styles.sectionHeader}>
+              <h2>Gestion de respaldos</h2>
+              <button
+                type="button"
+                className={styles.ghostBtn}
+                onClick={() =>
+                  void (user &&
+                    Promise.all([
+                      loadDatabaseStats(),
+                      loadBackupRecords(),
+                      loadBackupSchedule(),
+                    ]))
+                }
+                disabled={loadingDbStatus || loadingBackupRecords || loadingBackupSchedule}
+              >
+                {loadingDbStatus || loadingBackupRecords || loadingBackupSchedule
+                  ? "Actualizando..."
+                  : "Actualizar respaldos"}
+              </button>
+            </div>
 
             <div className={styles.backupPanel}>
               <div className={styles.backupPanelHeader}>
@@ -5721,7 +7177,8 @@ export default function AdminDashboardPage() {
                   <p>
                     Centraliza respaldos manuales y automaticos sin salir del panel. Todos los
                     archivos se registran en historial y se guardan en Google Drive para mantener
-                    trazabilidad y recuperacion rapida.
+                    trazabilidad y recuperacion rapida. Los respaldos manuales no modifican la
+                    programacion automatica.
                   </p>
                 </div>
 
@@ -5806,8 +7263,9 @@ export default function AdminDashboardPage() {
                   <div>
                     <h4>Programacion automatica de respaldos</h4>
                     <p>
-                      Los respaldos automaticos se guardan en una carpeta de Google Drive y la
-                      retencion elimina tanto el archivo en Drive como su registro en el historial.
+                      Los respaldos automaticos se guardan en una carpeta de Google Drive. Su
+                      retencion solo aplica a respaldos automaticos; los manuales se administran
+                      por separado.
                     </p>
                   </div>
                   <label className={styles.scheduleToggle}>
@@ -5876,7 +7334,34 @@ export default function AdminDashboardPage() {
                       }
                       disabled={savingBackupSchedule}
                     />
-                    <small>Los respaldos mas antiguos se eliminaran automaticamente.</small>
+                    <small>
+                      Solo los respaldos automaticos mas antiguos se eliminaran automaticamente.
+                    </small>
+                  </label>
+
+                  <label className={styles.scheduleField}>
+                    <span>Esquema programado</span>
+                    <select
+                      value={backupScheduleForm.schemaName}
+                      onChange={(e) =>
+                        setBackupScheduleForm((prev) => ({
+                          ...prev,
+                          schemaName: e.target.value,
+                        }))
+                      }
+                      disabled={savingBackupSchedule || loadingDbStatus}
+                    >
+                      <option value="">Base de datos completa</option>
+                      {dbSchemaItems.map((schemaName) => (
+                        <option key={schemaName} value={schemaName}>
+                          {formatTableName(schemaName)}
+                        </option>
+                      ))}
+                    </select>
+                    <small>
+                      Opcional. Si eliges un esquema, el respaldo automatico solo incluira ese
+                      alcance.
+                    </small>
                   </label>
                 </div>
 
@@ -5937,6 +7422,7 @@ export default function AdminDashboardPage() {
                           <th>Cada</th>
                           <th>Hora</th>
                           <th>Retencion</th>
+                          <th>Alcance</th>
                           <th>Ultima ejecucion</th>
                           <th>Proxima ejecucion</th>
                           <th>Actualizado</th>
@@ -5959,6 +7445,11 @@ export default function AdminDashboardPage() {
                           <td>Cada {backupSchedule?.everyDays ?? 1} dia(s)</td>
                           <td>{backupSchedule?.runAtTime ?? defaultBackupScheduleForm.runAtTime}</td>
                           <td>{backupSchedule?.retentionDays ?? 7} dia(s)</td>
+                          <td>
+                            {backupSchedule?.schemaName
+                              ? formatTableName(backupSchedule.schemaName)
+                              : "Toda la base"}
+                          </td>
                           <td>{formatScheduleDateTime(backupSchedule?.lastRunAt ?? null)}</td>
                           <td>{formatScheduleDateTime(backupSchedule?.nextRunAt ?? null)}</td>
                           <td>
@@ -6001,24 +7492,46 @@ export default function AdminDashboardPage() {
 
               {showTableBackupOptions ? (
                 <div className={styles.singleTableBackupBox}>
-                  <label htmlFor="single-table-backup-select">Selecciona una tabla</label>
+                  <label htmlFor="single-schema-backup-select">Selecciona un esquema o una tabla</label>
                   <div className={styles.singleTableBackupControls}>
+                    <select
+                      id="single-schema-backup-select"
+                      value={selectedBackupSchema}
+                      onChange={(e) => setSelectedBackupSchema(e.target.value)}
+                      disabled={dbSchemaItems.length === 0 || generatingTableBackup}
+                    >
+                      <option value="">Todos los esquemas</option>
+                      {dbSchemaItems.map((schemaName) => (
+                        <option key={schemaName} value={schemaName}>
+                          {formatTableName(schemaName)}
+                        </option>
+                      ))}
+                    </select>
                     <select
                       id="single-table-backup-select"
                       value={selectedBackupTable}
                       onChange={(e) => setSelectedBackupTable(e.target.value)}
-                      disabled={dbTableItems.length === 0 || generatingTableBackup}
+                      disabled={backupSelectableTables.length === 0 || generatingTableBackup}
                     >
-                      {dbTableItems.length === 0 ? (
+                      {backupSelectableTables.length === 0 ? (
                         <option value="">Sin tablas disponibles</option>
                       ) : (
-                        dbTableItems.map((table) => (
+                        backupSelectableTables.map((table) => (
                           <option key={table.tableName} value={table.tableName}>
-                            {table.tableName}
+                            {formatTableName(table.tableName)}
                           </option>
                         ))
                       )}
                     </select>
+                    <button
+                      type="button"
+                      onClick={() => void generateSingleSchemaBackup()}
+                      disabled={!selectedBackupSchema || generatingBackup || generatingTableBackup}
+                    >
+                      {generatingTableBackup
+                        ? "Generando respaldo..."
+                        : "Generar respaldo de esquema"}
+                    </button>
                     <button
                       type="button"
                       onClick={() => void generateSingleTableBackup()}
@@ -6039,6 +7552,7 @@ export default function AdminDashboardPage() {
                   <thead>
                     <tr>
                       <th>Archivo</th>
+                      <th>Tipo</th>
                       <th>Fecha de generacion</th>
                       <th>Tamaño</th>
                       <th>Acciones</th>
@@ -6047,7 +7561,7 @@ export default function AdminDashboardPage() {
                   <tbody>
                     {paginatedBackupRecords.length === 0 ? (
                       <tr>
-                        <td colSpan={4} className={styles.emptyCell}>
+                        <td colSpan={5} className={styles.emptyCell}>
                           No hay respaldos generados.
                         </td>
                       </tr>
@@ -6057,6 +7571,7 @@ export default function AdminDashboardPage() {
                           <td>
                             <code>{item.fileName}</code>
                           </td>
+                          <td>{formatBackupOrigin(item.origin)}</td>
                           <td>{formatBackupRecordDate(item)}</td>
                           <td>{formatBytes(item.sizeBytes)}</td>
                           <td className={styles.actionsCell}>
@@ -6120,6 +7635,495 @@ export default function AdminDashboardPage() {
           </section>
         ) : null}
 
+        {section === "automation" ? (
+          <section className={styles.section}>
+            <div className={styles.sectionHeader}>
+              <h2>Automatizacion</h2>
+              <button
+                type="button"
+                className={styles.ghostBtn}
+                onClick={() =>
+                  void Promise.all([loadDatabaseStats(), loadMaintenanceSchedule()])
+                }
+                disabled={loadingDbStatus || loadingMaintenanceSchedule || runningMaintenance}
+              >
+                {loadingDbStatus || loadingMaintenanceSchedule
+                  ? "Actualizando..."
+                  : "Actualizar tablas"}
+              </button>
+            </div>
+
+            <div className={styles.backupPanel}>
+              <div className={styles.backupPanelHeader}>
+                <div className={styles.backupPanelLead}>
+                  <span className={styles.backupEyebrow}>PostgreSQL y mantenimiento</span>
+                  <h3>Ejecutar mantenimiento manual de la base de datos</h3>
+                  <p>
+                    Lanza operaciones de VACUUM, ANALYZE o VACUUM ANALYZE con la
+                    misma experiencia visual de respaldos. El log se muestra en la
+                    ventana emergente y no se almacena en la base de datos.
+                  </p>
+                </div>
+
+                <div className={styles.backupPanelAside}>
+                  <div className={styles.backupStatPill}>
+                    <span>Operaciones</span>
+                    <strong>3 modos</strong>
+                  </div>
+                  <div className={styles.backupStatPill}>
+                    <span>Tablas</span>
+                    <strong>{formatNumber(dbTableItems.length)} disponibles</strong>
+                  </div>
+                </div>
+              </div>
+
+              <div className={styles.backupActionGrid}>
+                <button
+                  type="button"
+                  className={styles.backupPrimaryAction}
+                  onClick={confirmMaintenanceRun}
+                  disabled={runningMaintenance || loadingDbStatus}
+                >
+                  <span>Mantenimiento manual</span>
+                  <strong>
+                    {runningMaintenance
+                      ? "Ejecutando mantenimiento..."
+                      : "Ejecutar mantenimiento PostgreSQL"}
+                  </strong>
+                  <small>
+                    Reutiliza el mismo modal de logs del sistema de respaldos para
+                    mostrar el proceso de inicio a fin.
+                  </small>
+                </button>
+
+                <div className={`${styles.backupSecondaryAction} ${styles.backupSecondaryActionActive}`}>
+                  <span>Seguridad</span>
+                  <strong>VACUUM FULL deshabilitado</strong>
+                  <small>
+                    Solo se permiten VACUUM, ANALYZE y VACUUM ANALYZE, con
+                    confirmacion previa antes de ejecutar.
+                  </small>
+                </div>
+              </div>
+
+              <div className={styles.backupToolbar}>
+                <div className={styles.backupToolbarCopy}>
+                  <p>
+                    Si no eliges una tabla ni un esquema, el mantenimiento se ejecuta sobre
+                    todas las tablas disponibles. Si eliges un esquema, se limitara a ese
+                    alcance.
+                  </p>
+                </div>
+                <div className={styles.backupToolbarActions}>
+                  <button
+                    type="button"
+                    className={styles.ghostBtn}
+                    onClick={() => setMaintenanceForm(defaultMaintenanceForm)}
+                    disabled={runningMaintenance}
+                  >
+                    Restablecer formulario
+                  </button>
+                </div>
+              </div>
+
+              <div className={styles.schedulePanel}>
+                <div className={styles.scheduleHeader}>
+                  <div>
+                    <h4>Ejecucion manual</h4>
+                    <p>
+                      Selecciona el tipo de mantenimiento y, si lo necesitas, limita
+                      el alcance a una sola tabla.
+                    </p>
+                  </div>
+                  <label className={styles.scheduleToggle}>
+                    <input type="checkbox" checked={Boolean(maintenanceForm.tableName)} readOnly />
+                    <span>
+                      {maintenanceForm.tableName ? "Tabla especifica" : "Toda la base"}
+                    </span>
+                  </label>
+                </div>
+
+                <div className={styles.scheduleGrid}>
+                  <label className={styles.scheduleField}>
+                    <span>Operacion</span>
+                    <select
+                      value={maintenanceForm.operation}
+                      onChange={(e) =>
+                        setMaintenanceForm((prev) => ({
+                          ...prev,
+                          operation: e.target.value as MaintenanceOperation,
+                        }))
+                      }
+                      disabled={runningMaintenance}
+                    >
+                      <option value="VACUUM">VACUUM</option>
+                      <option value="ANALYZE">ANALYZE</option>
+                      <option value="VACUUM_ANALYZE">VACUUM ANALYZE</option>
+                    </select>
+                    <small>VACUUM FULL no esta permitido por seguridad.</small>
+                  </label>
+
+                  <label className={styles.scheduleField}>
+                    <span>Esquema</span>
+                    <select
+                      value={maintenanceForm.schemaName}
+                      onChange={(e) =>
+                        setMaintenanceForm((prev) => ({
+                          ...prev,
+                          schemaName: e.target.value,
+                          tableName: "",
+                        }))
+                      }
+                      disabled={runningMaintenance || loadingDbStatus}
+                    >
+                      <option value="">Toda la base de datos</option>
+                      {dbSchemaItems.map((schemaName) => (
+                        <option key={schemaName} value={schemaName}>
+                          {formatTableName(schemaName)}
+                        </option>
+                      ))}
+                    </select>
+                    <small>Opcional. Si lo eliges, se procesa todo ese esquema.</small>
+                  </label>
+
+                  <label className={styles.scheduleField}>
+                    <span>Tabla</span>
+                    <select
+                      value={maintenanceForm.tableName}
+                      onChange={(e) =>
+                        setMaintenanceForm((prev) => ({
+                          ...prev,
+                          tableName: e.target.value,
+                        }))
+                      }
+                      disabled={runningMaintenance || loadingDbStatus}
+                    >
+                      <option value="">Toda la base de datos</option>
+                      {maintenanceSelectableTables.map((table) => (
+                        <option key={table.tableName} value={table.tableName}>
+                          {formatTableName(table.tableName)}
+                        </option>
+                      ))}
+                    </select>
+                    <small>Opcional. Si lo dejas vacio, se procesan todas las tablas.</small>
+                  </label>
+
+                  <article className={styles.scheduleField}>
+                    <span>Resumen</span>
+                    <strong>{formatMaintenanceOperationLabel(maintenanceForm.operation)}</strong>
+                    <small>
+                      {maintenanceForm.tableName
+                        ? `Se aplicara a ${formatTableName(maintenanceForm.tableName)}.`
+                        : maintenanceForm.schemaName
+                          ? `Se aplicara al esquema ${formatTableName(maintenanceForm.schemaName)}.`
+                          : "Se aplicara a todas las tablas disponibles."}
+                    </small>
+                  </article>
+                </div>
+
+                <div className={styles.scheduleActions}>
+                  <button
+                    type="button"
+                    className={styles.schedulePrimaryAction}
+                    onClick={confirmMaintenanceRun}
+                    disabled={runningMaintenance || loadingDbStatus}
+                  >
+                    {runningMaintenance ? "Ejecutando..." : "Ejecutar mantenimiento"}
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.ghostBtn}
+                    onClick={() => void loadDatabaseStats()}
+                    disabled={loadingDbStatus || runningMaintenance}
+                  >
+                    {loadingDbStatus ? "Recargando..." : "Recargar tablas"}
+                  </button>
+                </div>
+              </div>
+
+              <div className={styles.schedulePanel}>
+                <div className={styles.scheduleHeader}>
+                  <div>
+                    <h4>Programacion automatica de mantenimiento</h4>
+                    <p>
+                      Programa VACUUM, ANALYZE o VACUUM ANALYZE para toda la base o
+                      una tabla especifica. La ejecucion corre en segundo plano y no
+                      guarda logs en base de datos.
+                    </p>
+                  </div>
+                  <label className={styles.scheduleToggle}>
+                    <input
+                      type="checkbox"
+                      checked={maintenanceScheduleForm.enabled}
+                      onChange={(e) =>
+                        setMaintenanceScheduleForm((prev) => ({
+                          ...prev,
+                          enabled: e.target.checked,
+                        }))
+                      }
+                      disabled={savingMaintenanceSchedule}
+                    />
+                    <span>
+                      {maintenanceScheduleForm.enabled
+                        ? "Automaticos activos"
+                        : "Solo manual"}
+                    </span>
+                  </label>
+                </div>
+
+                <div className={styles.scheduleGrid}>
+                  <label className={styles.scheduleField}>
+                    <span>Cada</span>
+                    <input
+                      type="number"
+                      min="1"
+                      max="365"
+                      value={maintenanceScheduleForm.everyDays}
+                      onChange={(e) =>
+                        setMaintenanceScheduleForm((prev) => ({
+                          ...prev,
+                          everyDays: e.target.value,
+                        }))
+                      }
+                      disabled={savingMaintenanceSchedule}
+                    />
+                    <small>Indica cada cuantos dias se ejecutara el mantenimiento.</small>
+                  </label>
+
+                  <label className={styles.scheduleField}>
+                    <span>Hora</span>
+                    <input
+                      type="time"
+                      value={maintenanceScheduleForm.runAtTime}
+                      onChange={(e) =>
+                        setMaintenanceScheduleForm((prev) => ({
+                          ...prev,
+                          runAtTime: e.target.value,
+                        }))
+                      }
+                      disabled={savingMaintenanceSchedule}
+                    />
+                    <small>Se usa el horario local del servidor.</small>
+                  </label>
+
+                  <label className={styles.scheduleField}>
+                    <span>Operacion</span>
+                    <select
+                      value={maintenanceScheduleForm.operation}
+                      onChange={(e) =>
+                        setMaintenanceScheduleForm((prev) => ({
+                          ...prev,
+                          operation: e.target.value as MaintenanceOperation,
+                        }))
+                      }
+                      disabled={savingMaintenanceSchedule}
+                    >
+                      <option value="VACUUM">VACUUM</option>
+                      <option value="ANALYZE">ANALYZE</option>
+                      <option value="VACUUM_ANALYZE">VACUUM ANALYZE</option>
+                    </select>
+                    <small>Operacion que se ejecutara en segundo plano.</small>
+                  </label>
+                </div>
+
+                <div className={styles.scheduleGrid}>
+                  <label className={styles.scheduleField}>
+                    <span>Esquema programado</span>
+                    <select
+                      value={maintenanceScheduleForm.schemaName}
+                      onChange={(e) =>
+                        setMaintenanceScheduleForm((prev) => ({
+                          ...prev,
+                          schemaName: e.target.value,
+                          tableName: "",
+                        }))
+                      }
+                      disabled={savingMaintenanceSchedule || loadingDbStatus}
+                    >
+                      <option value="">Toda la base de datos</option>
+                      {dbSchemaItems.map((schemaName) => (
+                        <option key={schemaName} value={schemaName}>
+                          {formatTableName(schemaName)}
+                        </option>
+                      ))}
+                    </select>
+                    <small>Opcional. Si lo eliges, se ejecutara sobre ese esquema.</small>
+                  </label>
+
+                  <label className={styles.scheduleField}>
+                    <span>Tabla programada</span>
+                    <select
+                      value={maintenanceScheduleForm.tableName}
+                      onChange={(e) =>
+                        setMaintenanceScheduleForm((prev) => ({
+                          ...prev,
+                          tableName: e.target.value,
+                        }))
+                      }
+                      disabled={savingMaintenanceSchedule || loadingDbStatus}
+                    >
+                      <option value="">Toda la base de datos</option>
+                      {maintenanceScheduleSelectableTables.map((table) => (
+                        <option key={table.tableName} value={table.tableName}>
+                          {formatTableName(table.tableName)}
+                        </option>
+                      ))}
+                    </select>
+                    <small>
+                      Opcional. Si lo dejas vacio, se procesan todas las tablas.
+                    </small>
+                  </label>
+
+                  <article className={styles.scheduleField}>
+                    <span>Ultima ejecucion</span>
+                    <strong>
+                      {formatScheduleDateTime(maintenanceSchedule?.lastRunAt ?? null)}
+                    </strong>
+                    <small>Se actualiza cuando termina la tarea automatica.</small>
+                  </article>
+
+                  <article className={styles.scheduleField}>
+                    <span>Proxima ejecucion</span>
+                    <strong>
+                      {formatScheduleDateTime(maintenanceSchedule?.nextRunAt ?? null)}
+                    </strong>
+                    <small>
+                      {maintenanceSchedule?.enabled
+                        ? "La siguiente fecha se calcula automaticamente."
+                        : "Activa la programacion para calcular la siguiente fecha."}
+                    </small>
+                  </article>
+                </div>
+
+                <div className={styles.scheduleActions}>
+                  <button
+                    type="button"
+                    className={styles.schedulePrimaryAction}
+                    onClick={() => void saveMaintenanceSchedule()}
+                    disabled={savingMaintenanceSchedule || loadingMaintenanceSchedule}
+                  >
+                    {savingMaintenanceSchedule
+                      ? "Guardando programacion..."
+                      : "Guardar programacion automatica"}
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.ghostBtn}
+                    onClick={() => void loadMaintenanceSchedule()}
+                    disabled={loadingMaintenanceSchedule || savingMaintenanceSchedule}
+                  >
+                    {loadingMaintenanceSchedule ? "Recargando..." : "Recargar programacion"}
+                  </button>
+                </div>
+
+                <div className={styles.scheduleRecordPanel}>
+                  <div className={styles.scheduleRecordHeader}>
+                    <div>
+                      <h5>Registro actual de programacion</h5>
+                      <p>
+                        Esta tabla refleja la unica tarea automatica disponible para
+                        mantenimiento PostgreSQL.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className={styles.scheduleRecordTableWrap}>
+                    <table className={styles.scheduleRecordTable}>
+                      <thead>
+                        <tr>
+                          <th>Estado</th>
+                          <th>Cada</th>
+                          <th>Hora</th>
+                          <th>Operacion</th>
+                          <th>Esquema</th>
+                          <th>Tabla</th>
+                          <th>Ultima ejecucion</th>
+                          <th>Proxima ejecucion</th>
+                          <th>Actualizado</th>
+                          <th>Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td>
+                            <span
+                              className={
+                                maintenanceSchedule?.enabled
+                                  ? styles.statusActive
+                                  : styles.statusInactive
+                              }
+                            >
+                              {maintenanceSchedule?.enabled ? "Programado" : "Solo manual"}
+                            </span>
+                          </td>
+                          <td>Cada {maintenanceSchedule?.everyDays ?? 1} dia(s)</td>
+                          <td>
+                            {maintenanceSchedule?.runAtTime ??
+                              defaultMaintenanceScheduleForm.runAtTime}
+                          </td>
+                          <td>
+                            {formatMaintenanceOperationLabel(
+                              maintenanceSchedule?.operation ??
+                                defaultMaintenanceScheduleForm.operation,
+                            )}
+                          </td>
+                          <td>
+                            {maintenanceSchedule?.schemaName
+                              ? formatTableName(maintenanceSchedule.schemaName)
+                              : "Toda la base"}
+                          </td>
+                          <td>
+                            {maintenanceSchedule?.tableName
+                              ? formatTableName(maintenanceSchedule.tableName)
+                              : "Toda la base"}
+                          </td>
+                          <td>
+                            {formatScheduleDateTime(maintenanceSchedule?.lastRunAt ?? null)}
+                          </td>
+                          <td>
+                            {formatScheduleDateTime(maintenanceSchedule?.nextRunAt ?? null)}
+                          </td>
+                          <td>
+                            {maintenanceSchedule?.updatedAt
+                              ? formatDateTime(maintenanceSchedule.updatedAt)
+                              : "Sin cambios"}
+                          </td>
+                          <td className={styles.actionsCell}>
+                            <button
+                              type="button"
+                              onClick={loadMaintenanceScheduleIntoForm}
+                              disabled={savingMaintenanceSchedule || loadingMaintenanceSchedule}
+                            >
+                              Editar
+                            </button>
+                            <button
+                              type="button"
+                              className={styles.danger}
+                              onClick={() =>
+                                requestConfirmation({
+                                  title: "Eliminar programacion automatica",
+                                  description:
+                                    "Se restablecera la tarea automatica de mantenimiento a modo manual.",
+                                  confirmLabel: "Eliminar programacion",
+                                  tone: "danger",
+                                  onConfirm: () => removeMaintenanceSchedule(),
+                                })
+                              }
+                              disabled={savingMaintenanceSchedule || loadingMaintenanceSchedule}
+                            >
+                              Eliminar
+                            </button>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        ) : null}
+
         {section === "extras" ? (
           <section className={styles.section}>
             <h2>Opciones extra</h2>
@@ -6139,6 +8143,107 @@ export default function AdminDashboardPage() {
               </button>
             </div>
           </section>
+        ) : null}
+
+        {pendingProductImageDraft ? (
+          <div className={styles.modalBackdrop} role="dialog" aria-modal="true">
+            <div className={`${styles.modalCard} ${styles.productImagePreviewModal}`}>
+              <div className={styles.modalHeader}>
+                <h3>Confirmar imagen</h3>
+              </div>
+
+              <p className={styles.modalSubtitle}>
+                Revisa la imagen antes de agregarla a la galeria del producto.
+              </p>
+
+              <div className={styles.productImagePreviewModalBody}>
+                <div className={styles.productImagePreviewFrame}>
+                  <img
+                    src={pendingProductImageDraft.previewUrl}
+                    alt="Vista previa de imagen por confirmar"
+                  />
+                </div>
+
+                <div className={styles.productImagePreviewInfo}>
+                  <span>
+                    {pendingProductImageDraft.source === "url"
+                      ? "Origen: URL"
+                      : "Origen: archivo"}
+                  </span>
+                  <strong>
+                    {pendingProductImageDrafts.length > 1
+                      ? `Imagen 1 de ${pendingProductImageDrafts.length} pendientes`
+                      : "Lista para agregarse"}
+                  </strong>
+                  <p>
+                    Al aceptar, la imagen se guardara en la columna de miniaturas y podras
+                    seleccionarla o quitarla cuando quieras.
+                  </p>
+                </div>
+              </div>
+
+              <div className={styles.modalFooter}>
+                <button type="button" className={styles.ghostBtn} onClick={cancelPendingProductImages}>
+                  Cancelar
+                </button>
+                <button type="button" onClick={acceptPendingProductImage}>
+                  Aceptar imagen
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {backupLogModal ? (
+          <div className={styles.modalBackdrop} role="dialog" aria-modal="true">
+            <div
+              className={`${styles.modalCard} ${styles.backupLogModalCard} ${
+                backupLogModal.isPending ? styles.backupLogModalCardPending : ""
+              }`}
+            >
+              <div className={styles.modalHeader}>
+                <h3>{backupLogModal.title}</h3>
+              </div>
+
+              <p className={styles.modalSubtitle}>{backupLogModal.subtitle}</p>
+
+              <div className={styles.modalSummaryGrid}>
+                {backupLogModal.summary.map((item) => (
+                  <article key={item.label}>
+                    <span>{item.label}</span>
+                    <strong>{item.value}</strong>
+                  </article>
+                ))}
+              </div>
+
+              <div className={styles.backupLogPanel}>
+                <div className={styles.backupLogHeader}>
+                  <h4>Log del proceso</h4>
+                  <span
+                    className={
+                      backupLogModal.statusTone === "error"
+                        ? styles.backupLogStatusError
+                        : backupLogModal.statusTone === "pending"
+                          ? styles.backupLogStatusPending
+                          : styles.backupLogStatusSuccess
+                    }
+                  >
+                    {backupLogModal.statusLabel}
+                  </span>
+                </div>
+
+                <pre className={styles.backupLogText}>{backupLogModal.logText}</pre>
+              </div>
+
+              {!backupLogModal.isPending ? (
+                <div className={styles.modalFooter}>
+                  <button type="button" onClick={() => setBackupLogModal(null)}>
+                    Aceptar
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          </div>
         ) : null}
 
         <ConfirmDialog

@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import type { CatalogProduct } from "@/services/catalog";
+import { getCatalogProducts, type CatalogProduct } from "@/services/catalog";
 import {
   MyProductReview,
   ProductReview,
@@ -12,6 +12,7 @@ import {
   getMyProductReview,
 } from "@/services/reviews";
 import { useAuth } from "@/context/AuthContext";
+import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import styles from "./producto.module.css";
 
@@ -65,8 +66,14 @@ export default function ProductDetailClient({
   product,
   productId,
 }: ProductDetailClientProps) {
+  const router = useRouter();
+  const relatedTrackRef = useRef<HTMLDivElement | null>(null);
   const { user } = useAuth();
   const [notifyRequested, setNotifyRequested] = useState(false);
+  const [relatedProducts, setRelatedProducts] = useState<CatalogProduct[]>([]);
+  const [relatedLoading, setRelatedLoading] = useState(false);
+  const [canScrollRelatedPrev, setCanScrollRelatedPrev] = useState(false);
+  const [canScrollRelatedNext, setCanScrollRelatedNext] = useState(false);
   const [reviews, setReviews] = useState<ProductReview[]>([]);
   const [reviewsSummary, setReviewsSummary] = useState<ProductReviewSummary>({
     count: 0,
@@ -76,10 +83,47 @@ export default function ProductDetailClient({
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [savingReview, setSavingReview] = useState(false);
   const [myReview, setMyReview] = useState<MyProductReview | null>(null);
+  const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(
+    product.imageUrl ?? null,
+  );
   const [reviewForm, setReviewForm] = useState({
     rating: 0,
     comment: "",
   });
+  const galleryImages = useMemo(() => {
+    if (product.images.length > 0) {
+      return product.images.map((image) => ({
+        key: String(image.id),
+        url: image.imageUrl,
+      }));
+    }
+
+    if (product.imageUrl) {
+      return [{ key: "primary", url: product.imageUrl }];
+    }
+
+    return [] as Array<{ key: string; url: string }>;
+  }, [product.imageUrl, product.images]);
+
+  useEffect(() => {
+    setSelectedImageUrl(product.imageUrl ?? null);
+  }, [product.imageUrl]);
+
+  const selectedImageIndex = useMemo(() => {
+    if (!selectedImageUrl) return -1;
+    return galleryImages.findIndex((image) => image.url === selectedImageUrl);
+  }, [galleryImages, selectedImageUrl]);
+
+  const showGalleryArrows = galleryImages.length > 1;
+
+  const moveGallery = (direction: -1 | 1) => {
+    if (galleryImages.length <= 1) return;
+
+    const currentIndex = selectedImageIndex >= 0 ? selectedImageIndex : 0;
+    const nextIndex =
+      (currentIndex + direction + galleryImages.length) % galleryImages.length;
+    setSelectedImageUrl(galleryImages[nextIndex]?.url ?? null);
+  };
 
   const loadReviews = useCallback(async () => {
     try {
@@ -101,6 +145,78 @@ export default function ProductDetailClient({
   useEffect(() => {
     void loadReviews();
   }, [loadReviews]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadRelatedProducts = async () => {
+      try {
+        setRelatedLoading(true);
+        const result = await getCatalogProducts({
+          clasificaciones: [product.clasificacion],
+          page: 1,
+          pageSize: 8,
+        });
+
+        if (cancelled) return;
+
+        setRelatedProducts(
+          result.products.filter((item) => item.id !== productId).slice(0, 8),
+        );
+      } catch {
+        if (!cancelled) {
+          setRelatedProducts([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setRelatedLoading(false);
+        }
+      }
+    };
+
+    void loadRelatedProducts();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [product.clasificacion, productId]);
+
+  const updateRelatedArrows = useCallback(() => {
+    const node = relatedTrackRef.current;
+    if (!node) {
+      setCanScrollRelatedPrev(false);
+      setCanScrollRelatedNext(false);
+      return;
+    }
+
+    const maxScrollLeft = node.scrollWidth - node.clientWidth;
+    setCanScrollRelatedPrev(node.scrollLeft > 8);
+    setCanScrollRelatedNext(maxScrollLeft - node.scrollLeft > 8);
+  }, []);
+
+  useEffect(() => {
+    updateRelatedArrows();
+    const node = relatedTrackRef.current;
+    if (!node) return;
+
+    const handleScroll = () => updateRelatedArrows();
+    node.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("resize", updateRelatedArrows);
+
+    return () => {
+      node.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("resize", updateRelatedArrows);
+    };
+  }, [relatedProducts, updateRelatedArrows]);
+
+  const scrollRelated = (direction: -1 | 1) => {
+    const node = relatedTrackRef.current;
+    if (!node) return;
+
+    const card = node.querySelector<HTMLElement>("[data-related-card='true']");
+    const scrollAmount = card ? card.offsetWidth + 16 : Math.max(node.clientWidth * 0.8, 280);
+    node.scrollBy({ left: direction * scrollAmount, behavior: "smooth" });
+  };
 
   const loadMyReview = useCallback(async () => {
     if (!user) {
@@ -202,18 +318,63 @@ export default function ProductDetailClient({
         <Link href="/" className={styles.crumbLink}>
           Inicio
         </Link>
-        <span className={styles.crumbSeparator}>/</span>
+        <span className={styles.crumbSeparator}>›</span>
         <Link href="/catalogo" className={styles.crumbLink}>
           Catalogo
         </Link>
-        <span className={styles.crumbSeparator}>/</span>
+        <span className={styles.crumbSeparator}>›</span>
         <strong className={styles.crumbCurrent}>{product.nombre}</strong>
       </nav>
 
       <div className={styles.detail}>
         <article className={styles.imagePanel}>
           {product.requiereReceta ? <span className={styles.badge}>REQUIERE RECETA</span> : null}
-          <div className={styles.visual}>{getProductMonogram(product.nombre)}</div>
+          {showGalleryArrows ? (
+            <>
+              <button
+                type="button"
+                className={`${styles.galleryArrow} ${styles.galleryArrowLeft}`}
+                onClick={() => moveGallery(-1)}
+                aria-label="Imagen anterior"
+              >
+                ‹
+              </button>
+              <button
+                type="button"
+                className={`${styles.galleryArrow} ${styles.galleryArrowRight}`}
+                onClick={() => moveGallery(1)}
+                aria-label="Imagen siguiente"
+              >
+                ›
+              </button>
+            </>
+          ) : null}
+          {selectedImageUrl ? (
+            <img
+              src={selectedImageUrl}
+              alt={product.nombre}
+              className={styles.visualImage}
+            />
+          ) : (
+            <div className={styles.visual}>{getProductMonogram(product.nombre)}</div>
+          )}
+
+          {galleryImages.length > 1 ? (
+            <div className={styles.thumbnailGrid}>
+              {galleryImages.map((image, index) => (
+                <button
+                  key={image.key}
+                  type="button"
+                  className={`${styles.thumbnailBtn} ${
+                    selectedImageUrl === image.url ? styles.thumbnailBtnActive : ""
+                  }`}
+                  onClick={() => setSelectedImageUrl(image.url)}
+                >
+                  <img src={image.url} alt={`Vista previa ${index + 1}`} />
+                </button>
+              ))}
+            </div>
+          ) : null}
         </article>
 
         <article className={styles.content}>
@@ -226,7 +387,7 @@ export default function ProductDetailClient({
           <div className={styles.metaGrid}>
             <div>
               <h3>Garantia</h3>
-              <p>12 meses</p>
+              <p>3 meses</p>
             </div>
             <div>
               <h3>Disponibilidad</h3>
@@ -293,6 +454,80 @@ export default function ProductDetailClient({
           ) : null}
         </article>
       </div>
+
+      <section className={styles.relatedSection}>
+        <div className={styles.relatedHeader}>
+          <h2>Productos relacionados</h2>
+          <span>Misma clasificacion</span>
+        </div>
+
+        {relatedLoading ? <p className={styles.info}>Cargando productos relacionados...</p> : null}
+
+        {!relatedLoading && relatedProducts.length > 0 ? (
+          <div className={styles.relatedCarousel}>
+            <button
+              type="button"
+              className={`${styles.relatedArrow} ${styles.relatedArrowLeft}`}
+              onClick={() => scrollRelated(-1)}
+              aria-label="Ver productos relacionados anteriores"
+              disabled={!canScrollRelatedPrev}
+            >
+              ‹
+            </button>
+            <div ref={relatedTrackRef} className={styles.relatedTrack}>
+              <div className={styles.relatedGrid}>
+            {relatedProducts.map((item) => (
+              <article
+                key={item.id}
+                className={styles.relatedCard}
+                data-related-card="true"
+                role="link"
+                tabIndex={0}
+                onClick={() => router.push(`/producto/${item.id}`)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    router.push(`/producto/${item.id}`);
+                  }
+                }}
+              >
+                <div className={styles.relatedImageWrap}>
+                  {item.requiereReceta ? (
+                    <span className={styles.relatedBadge}>Requiere receta</span>
+                  ) : null}
+                  {item.imageUrl ? (
+                    <img
+                      src={item.imageUrl}
+                      alt={item.nombre}
+                      className={styles.relatedImage}
+                    />
+                  ) : (
+                    <div className={styles.relatedFallback}>
+                      {getProductMonogram(item.nombre)}
+                    </div>
+                  )}
+                </div>
+                <div className={styles.relatedBody}>
+                  <h3>{item.nombre}</h3>
+                  <p>{item.clasificacion}</p>
+                  <strong>{formatMoney(item.precio)}</strong>
+                </div>
+              </article>
+            ))}
+              </div>
+          </div>
+            <button
+              type="button"
+              className={`${styles.relatedArrow} ${styles.relatedArrowRight}`}
+              onClick={() => scrollRelated(1)}
+              aria-label="Ver más productos relacionados"
+              disabled={!canScrollRelatedNext}
+            >
+              ›
+            </button>
+          </div>
+        ) : null}
+      </section>
 
       <section className={styles.reviewSection}>
         <div className={styles.reviewHeader}>

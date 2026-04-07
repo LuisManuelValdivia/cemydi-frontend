@@ -2,7 +2,7 @@
   background: linear-gradient(90deg, #1e6260 0%, #2aa09d 100%);
   padding: 20px 60px;
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 20px;
   position: sticky;
@@ -28,6 +28,7 @@
 .searchWrap {
   display: flex;
   justify-content: center;
+  min-width: 0;
 }
 
 .searchForm {
@@ -106,6 +107,8 @@
   display: flex;
   align-items: center;
   gap: 16px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .link {
@@ -160,6 +163,36 @@
 
   .nav {
     justify-content: center;
-    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 640px) {
+  .header {
+    padding: 12px;
+  }
+
+  .logo {
+    justify-content: center;
+  }
+
+  .search {
+    padding: 0 92px 0 42px;
+    height: 44px;
+  }
+
+  .searchButton {
+    height: 32px;
+    padding: 0 12px;
+  }
+
+  .nav {
+    gap: 10px;
+  }
+
+  .link,
+  .btnOutline,
+  .btnSolid {
+    width: 100%;
+    text-align: center;
   }
 }

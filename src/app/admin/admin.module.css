@@ -682,6 +682,14 @@
   box-shadow: 0 18px 48px rgba(9, 29, 37, 0.35);
 }
 
+.backupLogModalCard {
+  width: min(980px, 100%);
+}
+
+.backupLogModalCardPending {
+  width: min(560px, 100%);
+}
+
 .modalHeader {
   display: flex;
   align-items: center;
@@ -864,6 +872,94 @@
   cursor: pointer;
   background: #2a9f9b;
   color: #ffffff;
+}
+
+.backupLogPanel {
+  border: 1px solid #d7e4e7;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #fbfefe 0%, #f3f8f9 100%);
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.backupLogHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.backupLogHeader h4 {
+  margin: 0;
+  color: #18333b;
+  font-size: 1rem;
+}
+
+.backupLogHeader span {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.backupLogStatusSuccess {
+  background: #e9f7ee;
+  color: #1f7a43;
+}
+
+.backupLogStatusPending {
+  background: #eef6fb;
+  color: #285c86;
+}
+
+.backupLogStatusError {
+  background: #fdeceb;
+  color: #a3332b;
+}
+
+.backupLogText {
+  margin: 0;
+  min-height: 280px;
+  max-height: 52vh;
+  overflow: auto;
+  border: 1px solid #d7e4e7;
+  border-radius: 12px;
+  background: #1e1e1e;
+  color: #f3f5f7;
+  padding: 14px;
+  font-family: "Cascadia Code", "Consolas", monospace;
+  font-size: 0.92rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.backupLogList {
+  display: grid;
+  gap: 10px;
+}
+
+.backupLogItem {
+  border: 1px solid #dce7ea;
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 12px;
+  display: grid;
+  gap: 5px;
+}
+
+.backupLogItem strong {
+  color: #17303a;
+  font-size: 0.95rem;
+}
+
+.backupLogItem p {
+  margin: 0;
+  color: #4d6670;
+  line-height: 1.55;
 }
 
 .exportMetaBar {
@@ -1889,6 +1985,375 @@
   font-size: 0.78rem;
 }
 
+.analyticsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.analyticsPanel {
+  border: 1px solid #d1e1e4;
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at top right, rgba(45, 143, 143, 0.08), transparent 28%),
+    linear-gradient(180deg, #fbfefe 0%, #f4f8f9 100%);
+  padding: 16px;
+  display: grid;
+  gap: 14px;
+}
+
+.analyticsPanelFull {
+  grid-column: 1 / -1;
+}
+
+.analyticsPanelHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.analyticsPanelHeader h3,
+.chartCardHeader h4 {
+  margin: 0;
+  color: #17303a;
+}
+
+.analyticsPanelHeader p,
+.chartCardHeader span {
+  margin: 4px 0 0;
+  color: #587078;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.analyticsStamp {
+  border: 1px solid #d0e0e3;
+  border-radius: 999px;
+  background: #f3f8f8;
+  color: #355762;
+  padding: 6px 10px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.analyticsSummaryGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.analyticsMetricCard {
+  border: 1px solid #d7e5e7;
+  border-radius: 14px;
+  background: #ffffff;
+  padding: 14px;
+  display: grid;
+  gap: 8px;
+}
+
+.analyticsMetricCard span {
+  color: #54707a;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.analyticsMetricCard strong {
+  color: #102a33;
+  font-size: 1.45rem;
+}
+
+.chartCard {
+  border: 1px solid #d7e5e7;
+  border-radius: 16px;
+  background: #ffffff;
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.chartCardHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.chartBars,
+.userBarList {
+  display: grid;
+  gap: 12px;
+}
+
+.chartBarItem,
+.userBarItem {
+  display: grid;
+  gap: 8px;
+}
+
+.chartBarMeta,
+.userBarHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.chartBarMeta > div,
+.userBarIdentity > div {
+  display: grid;
+  gap: 3px;
+}
+
+.chartBarMeta strong,
+.userBarIdentity strong {
+  color: #16303a;
+}
+
+.chartBarMeta span,
+.userBarIdentity span,
+.chartBarMeta p,
+.userBarHeader p {
+  margin: 0;
+  color: #5a7178;
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.chartTrack {
+  width: 100%;
+  height: 12px;
+  border-radius: 999px;
+  background: #e8eff1;
+  overflow: hidden;
+}
+
+.chartFillPrimary,
+.chartFillAccent,
+.chartFillDark {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+}
+
+.chartFillPrimary {
+  background: linear-gradient(90deg, #1170a6 0%, #22a6dc 100%);
+}
+
+.chartFillAccent {
+  background: linear-gradient(90deg, #f39c12 0%, #ffd166 100%);
+}
+
+.chartFillDark {
+  background: linear-gradient(90deg, #0f4d56 0%, #2d8f8f 100%);
+}
+
+.monitorTableWrap {
+  border: 1px solid #d7e5e7;
+  border-radius: 16px;
+  background: #ffffff;
+  overflow: auto;
+}
+
+.monitorTable {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 720px;
+}
+
+.monitorTable th,
+.monitorTable td {
+  padding: 12px 14px;
+  border-bottom: 1px solid #edf2f3;
+  text-align: left;
+}
+
+.monitorTable th {
+  background: #edf5f6;
+  color: #42616a;
+  font-size: 0.82rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.monitorTable td {
+  color: #1f3a43;
+  font-weight: 600;
+}
+
+.monitorTable tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.tableDetailCell {
+  display: grid;
+  gap: 3px;
+}
+
+.tableDetailCell strong {
+  color: #18323b;
+}
+
+.tableDetailCell span {
+  color: #5b7178;
+  font-size: 0.84rem;
+}
+
+.tableUsageValue {
+  color: #8a6a16;
+  font-weight: 800;
+}
+
+.connectionPanel {
+  display: grid;
+  gap: 14px;
+}
+
+.connectionOverview {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 18px;
+  align-items: center;
+}
+
+.connectionDonut {
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  margin: 0 auto;
+}
+
+.connectionDonutCenter {
+  width: 108px;
+  height: 108px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px #dce7ea;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  padding: 12px;
+}
+
+.connectionDonutCenter strong {
+  color: #102a33;
+  font-size: 1.5rem;
+}
+
+.connectionDonutCenter span {
+  color: #5b7077;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.connectionLegend {
+  display: grid;
+  gap: 10px;
+}
+
+.connectionLegend article {
+  border: 1px solid #d8e4e7;
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 11px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.connectionLegend article div {
+  display: grid;
+  gap: 3px;
+}
+
+.connectionLegend strong {
+  color: #17303a;
+}
+
+.connectionLegend span {
+  color: #5a7077;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.legendDot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+.legendActive {
+  background: #1f9d73;
+}
+
+.legendInternal {
+  background: #f2b035;
+}
+
+.legendIdle {
+  background: #cfd8e3;
+}
+
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 5px 9px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.statusActive {
+  border: 1px solid #c8e6d2;
+  background: #edf9f1;
+  color: #1b6b36;
+}
+
+.statusIdle {
+  border: 1px solid #d7dfe8;
+  background: #f5f7fa;
+  color: #53636e;
+}
+
+.statusInternal {
+  border: 1px solid #f0dcb0;
+  background: #fff7e7;
+  color: #9a6900;
+}
+
+.statusOther {
+  border: 1px solid #d7dce5;
+  background: #f3f5f8;
+  color: #4a5e68;
+}
+
+.userBarIdentity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.userAvatarMini {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #0f4d56 0%, #2d8f8f 100%);
+  color: #ffffff;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
 .backupPanel {
   border: 1px solid #cfe0e4;
   border-radius: 20px;
@@ -2139,7 +2604,8 @@
   padding: 14px;
 }
 
-.scheduleField input {
+.scheduleField input,
+.scheduleField select {
   width: 100%;
   border: 1px solid #c9dce0;
   border-radius: 10px;
@@ -2147,6 +2613,11 @@
   color: #173740;
   font-size: 0.95rem;
   padding: 10px 12px;
+}
+
+.scheduleField strong {
+  color: #17303a;
+  font-size: 1.05rem;
 }
 
 .scheduleField small {
@@ -2415,6 +2886,15 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .analyticsGrid,
+  .analyticsSummaryGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .connectionOverview {
+    grid-template-columns: 1fr;
+  }
+
   .backupPanelHeader,
   .backupToolbar,
   .scheduleHeader {
@@ -2462,6 +2942,20 @@
 
   .productSearch {
     width: 100%;
+  }
+
+  .productImageGallery,
+  .productImagePreviewModalBody {
+    grid-template-columns: 1fr;
+  }
+
+  .productImageStage {
+    min-height: 360px;
+  }
+
+  .productImageColumn {
+    max-height: none;
+    overflow: visible;
   }
 
   .reviewFilters {
@@ -2530,6 +3024,18 @@
     grid-column: span 1;
   }
 
+  .productImageUrlRow {
+    grid-template-columns: 1fr;
+  }
+
+  .productImagesHeader {
+    flex-direction: column;
+  }
+
+  .productImageThumbCard {
+    grid-template-columns: 72px minmax(0, 1fr);
+  }
+
   .checkboxWrap {
     grid-column: span 1;
   }
@@ -2560,6 +3066,24 @@
 
   .monitorAside {
     grid-template-columns: 1fr;
+  }
+
+  .analyticsPanelHeader,
+  .chartCardHeader,
+  .chartBarMeta,
+  .userBarHeader {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .connectionDonut {
+    width: 160px;
+    height: 160px;
+  }
+
+  .connectionDonutCenter {
+    width: 98px;
+    height: 98px;
   }
 
   .modalCard {
@@ -2690,4 +3214,222 @@
   .tableInsightsRow p:nth-of-type(2)::before {
     content: "Tamano:";
   }
+}
+.productImagesPanel {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid #d8e7ea;
+  border-radius: 18px;
+  background: #f7fbfc;
+}
+
+.productImagesHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  color: #1e4859;
+}
+
+.productImagesHeader p {
+  margin: 6px 0 0;
+  color: #5b7581;
+  font-size: 0.94rem;
+  line-height: 1.45;
+}
+
+.productImageUrlRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.productFileActions {
+  display: grid;
+  gap: 8px;
+}
+
+.productFileActions p {
+  margin: 0;
+  color: #54707d;
+  font-size: 0.95rem;
+}
+
+.productImageGroup {
+  display: grid;
+  gap: 10px;
+}
+
+.productImageGroup h4 {
+  margin: 0;
+  color: #274b58;
+  font-size: 1rem;
+}
+
+.productImageGallery {
+  display: grid;
+  grid-template-columns: minmax(230px, 280px) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.productImageColumn {
+  display: grid;
+  gap: 10px;
+  max-height: 540px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.productImageThumbCard {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid #d8e7ea;
+  border-radius: 16px;
+  background: #fff;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.productImageThumbCardActive {
+  border-color: #2b8d8a;
+  box-shadow: 0 12px 28px rgba(33, 102, 109, 0.12);
+  transform: translateY(-1px);
+}
+
+.productImageThumbButton {
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+}
+
+.productImageThumbButton img {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: 12px;
+  background: #eef5f6;
+}
+
+.productImageThumbMeta {
+  display: grid;
+  align-content: space-between;
+  gap: 8px;
+}
+
+.productImageThumbMeta span {
+  color: #205060;
+  font-size: 0.82rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.productImageStage {
+  min-height: 540px;
+  border: 1px solid #d8e7ea;
+  border-radius: 20px;
+  background: linear-gradient(180deg, #ffffff 0%, #f3f9fa 100%);
+  padding: 14px;
+  display: grid;
+  place-items: center;
+}
+
+.productImageStage img {
+  width: 100%;
+  max-height: 510px;
+  object-fit: contain;
+  border-radius: 18px;
+  background: #eef5f6;
+}
+
+.productImageStagePlaceholder {
+  display: grid;
+  gap: 8px;
+  text-align: center;
+  color: #51717c;
+}
+
+.productImageStagePlaceholder strong {
+  color: #183d4c;
+  font-size: 1.1rem;
+}
+
+.productImageEmptyState {
+  display: grid;
+  gap: 6px;
+  padding: 18px 16px;
+  border: 1px dashed #c6d9de;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.8);
+  color: #54707d;
+}
+
+.productImageEmptyState strong {
+  color: #1f4554;
+}
+
+.productImageRemoveBtn {
+  border: 1px solid #d6e2e4;
+  border-radius: 999px;
+  padding: 8px 10px;
+  background: #fff;
+  color: #234655;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.productImagePreviewModal {
+  max-width: 760px;
+}
+
+.productImagePreviewModalBody {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(220px, 0.8fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.productImagePreviewFrame {
+  border: 1px solid #d5e5e8;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #f9fcfc 0%, #f2f7f8 100%);
+  padding: 14px;
+}
+
+.productImagePreviewFrame img {
+  width: 100%;
+  max-height: 420px;
+  object-fit: contain;
+  border-radius: 14px;
+  background: #edf4f5;
+}
+
+.productImagePreviewInfo {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
+.productImagePreviewInfo span {
+  color: #25606f;
+  font-size: 0.82rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.productImagePreviewInfo strong {
+  color: #173b48;
+  font-size: 1.2rem;
+}
+
+.productImagePreviewInfo p {
+  margin: 0;
+  color: #4e6a74;
+  line-height: 1.55;
 }
