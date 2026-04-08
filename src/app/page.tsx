@@ -1,17 +1,6 @@
-import Link from "next/link";
+import { PromotionsShowcase } from "@/components/home/promotions-showcase";
 import { ActivePromotion, getActivePromotions } from "@/services/catalog";
-
-function getProductMonogram(nombre: string) {
-  const clean = nombre.trim().toUpperCase();
-  if (!clean) return "PR";
-  const parts = clean.split(/\s+/).filter(Boolean);
-
-  if (parts.length === 1) {
-    return parts[0].slice(0, 2);
-  }
-
-  return `${parts[0][0]}${parts[1][0]}`;
-}
+import Link from "next/link";
 
 async function loadPromotions() {
   try {
@@ -62,59 +51,7 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section className="bg-[#f2f6f7] px-4 pt-6 pb-9">
-        <div className="mx-auto grid max-w-[1120px] gap-[14px]">
-          <div>
-            <h2 className="m-0 text-[1.7rem] text-[#14323f]">Promociones destacadas</h2>
-            <p className="mt-1.5 font-semibold text-[#4f6771]">
-              Banners interactivos con vigencia activa. Haz clic para ver el producto.
-            </p>
-          </div>
-
-          <div className="grid gap-[14px] max-[680px]:grid-cols-1 min-[681px]:max-[980px]:grid-cols-2 min-[981px]:grid-cols-3">
-            {promotions.length === 0 ? (
-              <article className="col-span-full rounded-[14px] border border-dashed border-[#ccdadf] bg-white p-5 text-center font-bold text-[#56707a]">
-                <p>No hay promociones activas por ahora.</p>
-              </article>
-            ) : (
-              promotions.slice(0, 8).map((promotion) => (
-                <Link
-                  key={promotion.id}
-                  href={`/producto/${promotion.productId}`}
-                  className="overflow-hidden rounded-2xl border border-[#d6e3e6] bg-white no-underline transition hover:-translate-y-[3px] hover:shadow-[0_8px_20px_rgba(24,70,84,0.14)]"
-                >
-                  <div
-                    className="grid h-[140px] place-items-center bg-[linear-gradient(135deg,#215a6a_0%,#2a8f8d_100%)] bg-cover bg-center text-white"
-                    style={
-                      promotion.imageUrl
-                        ? { backgroundImage: `url(${promotion.imageUrl})` }
-                        : undefined
-                    }
-                  >
-                    {!promotion.imageUrl ? (
-                      <span className="text-[2.6rem] font-extrabold tracking-[0.04em]">
-                        {getProductMonogram(promotion.product.nombre)}
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="p-3">
-                    <span className="inline-flex rounded-full bg-[#e8f7f0] px-2 py-1 text-[0.74rem] font-extrabold uppercase text-[#1d7d4f]">
-                      Promoción activa
-                    </span>
-                    <h3 className="mt-2.5 mb-1 text-[1.25rem] text-[#16303e]">
-                      {promotion.product.nombre}
-                    </h3>
-                    <p className="m-0 font-bold text-[#2f6470]">{promotion.product.clasificacion}</p>
-                    <small className="mt-2 block text-[0.9rem] leading-[1.35] text-[#61767f]">
-                      {promotion.descripcion || "Promoción especial vigente."}
-                    </small>
-                  </div>
-                </Link>
-              ))
-            )}
-          </div>
-        </div>
-      </section>
+      <PromotionsShowcase promotions={promotions} />
     </>
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { CatalogProduct } from "@/services/catalog";
@@ -75,10 +76,25 @@ export default function ProductDetailClient({
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [savingReview, setSavingReview] = useState(false);
   const [myReview, setMyReview] = useState<MyProductReview | null>(null);
+  const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(
+    product.imageUrl ?? product.images[0]?.imageUrl ?? null,
+  );
   const [reviewForm, setReviewForm] = useState({
     rating: 0,
     comment: "",
   });
+
+  const productImages = useMemo(() => {
+    return product.images.length > 0
+      ? product.images
+      : product.imageUrl
+        ? [{ id: 0, imageUrl: product.imageUrl, sortOrder: 0, createdAt: product.createdAt }]
+        : [];
+  }, [product.createdAt, product.imageUrl, product.images]);
+
+  useEffect(() => {
+    setSelectedImageUrl(product.imageUrl ?? product.images[0]?.imageUrl ?? null);
+  }, [product.imageUrl, product.images]);
 
   const loadReviews = useCallback(async () => {
     try {
@@ -221,9 +237,49 @@ export default function ProductDetailClient({
               REQUIERE RECETA
             </span>
           ) : null}
-          <div className="grid h-[340px] w-[340px] place-items-center rounded-[28px] border border-[#d7e3e6] bg-[linear-gradient(160deg,#f4f8f8_0%,#eaf1f3_100%)] text-[5.8rem] font-extrabold tracking-[0.04em] text-[#1f6a67] max-[1080px]:h-[260px] max-[1080px]:w-[260px] max-[1080px]:text-[4.2rem]">
-            {getProductMonogram(product.nombre)}
-          </div>
+          {selectedImageUrl ? (
+            <div className="relative h-full max-h-[460px] w-full">
+              <Image
+                src={selectedImageUrl}
+                alt={product.nombre}
+                fill
+                sizes="(max-width: 1080px) 100vw, 50vw"
+                className="rounded-[28px] object-contain p-6"
+              />
+            </div>
+          ) : (
+            <div className="grid h-[340px] w-[340px] place-items-center rounded-[28px] border border-[#d7e3e6] bg-[linear-gradient(160deg,#f4f8f8_0%,#eaf1f3_100%)] text-[5.8rem] font-extrabold tracking-[0.04em] text-[#1f6a67] max-[1080px]:h-[260px] max-[1080px]:w-[260px] max-[1080px]:text-[4.2rem]">
+              {getProductMonogram(product.nombre)}
+            </div>
+          )}
+          {productImages.length > 1 ? (
+            <div className="absolute right-[18px] bottom-[18px] left-[18px] flex flex-wrap gap-2 rounded-[18px] bg-[rgba(255,255,255,0.92)] p-2 backdrop-blur">
+              {productImages.map((image) => {
+                const isActive = image.imageUrl === selectedImageUrl;
+
+                return (
+                  <button
+                    key={`${image.id}-${image.sortOrder}`}
+                    type="button"
+                    className={`h-16 w-16 overflow-hidden rounded-[14px] border ${
+                      isActive ? "border-[#1f6a67]" : "border-[#d7e3e6]"
+                    }`}
+                    onClick={() => setSelectedImageUrl(image.imageUrl)}
+                  >
+                    <span className="relative block h-full w-full">
+                      <Image
+                        src={image.imageUrl}
+                        alt={`${product.nombre} ${image.sortOrder + 1}`}
+                        fill
+                        sizes="64px"
+                        className="object-cover"
+                      />
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
         </article>
 
         <article className="rounded-[28px] border border-[#dbe4e6] bg-white p-[26px]">

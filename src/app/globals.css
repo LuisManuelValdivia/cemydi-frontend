@@ -1,10 +1,14 @@
 @import "tailwindcss";
 
+/* Tema oscuro anidado (solo admin): `dark:` aplica con un ancestro `.dark`, no solo en `html`. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --brand-900: #0f3d3b;
   --brand-800: #154f4d;
   --brand-700: #1e6260;
   --brand-600: #2ba2a1;
+  --user-avatar-bg: #154f4d;
 
   --surface: #f4f7f7;
   --card: #ffffff;
@@ -17,6 +21,127 @@
 
   --shadow-md: 0 18px 40px rgba(15, 61, 59, 0.14);
   --focus-ring: 2px solid #20626c;
+}
+
+/* Tokens Tailwind / shadcn alineados con la marca CEMMYDI (ver :root arriba) */
+@theme {
+  --color-background: var(--surface);
+  --color-foreground: var(--text-main);
+  --color-card: var(--card);
+  --color-card-foreground: var(--text-main);
+  --color-popover: var(--card);
+  --color-popover-foreground: var(--text-main);
+  --color-primary: var(--brand-700);
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #e8f2f2;
+  --color-secondary-foreground: var(--text-main);
+  --color-muted: #eef5f5;
+  --color-muted-foreground: var(--text-muted);
+  --color-accent: #e4f0f0;
+  --color-accent-foreground: var(--text-main);
+  --color-destructive: #ef4444;
+  --color-border: var(--border-soft);
+  --color-input: var(--border-soft);
+  --color-ring: var(--brand-600);
+  /* Sidebar alineado al panel: fondo blanco (principal) y verde marca en acentos */
+  --color-sidebar: var(--card);
+  --color-sidebar-foreground: var(--text-main);
+  --color-sidebar-primary: var(--brand-700);
+  --color-sidebar-primary-foreground: #ffffff;
+  --color-sidebar-accent: #e8f2f2;
+  --color-sidebar-accent-foreground: var(--text-main);
+  --color-sidebar-border: var(--border-soft);
+  --color-sidebar-ring: var(--brand-600);
+  --sidebar-nav-hover-bg: color-mix(in srgb, var(--brand-600) 12%, #ffffff);
+  --sidebar-nav-hover-fg: var(--brand-800);
+  --sidebar-nav-active-bg: color-mix(in srgb, var(--brand-600) 16%, #ffffff);
+  --sidebar-nav-active-fg: var(--brand-800);
+  --sidebar-nav-hover-shadow: 0 10px 24px rgba(43, 162, 161, 0.14);
+  --sidebar-nav-active-shadow: 0 12px 28px rgba(43, 162, 161, 0.18);
+  --radius-sm: 9px;
+  --radius-md: 14px;
+  --radius-lg: 14px;
+  --radius-xl: 28px;
+}
+
+/*
+ * Panel admin (tema oscuro): fondo negro, acentos marca CEMMYDI.
+ * Si tienes la Guía de Estilos en PDF, colócala en el repo o pega aquí hex tipográficos
+ * para alinear 1:1 con la guía.
+ */
+.dark {
+  /* Listas nativas (select), scrollbars y similares siguen el esquema oscuro del SO/navegador */
+  color-scheme: dark;
+
+  /* Acentos marca (legibles sobre negro) */
+  --brand-900: #c8ebe9;
+  --brand-800: #9fd9d6;
+  --brand-700: #5ec4c0;
+  --brand-600: #7dd3d0;
+  --user-avatar-bg: #154f4d;
+
+  /* Base negra + capas neutras (shadcn / UI) */
+  --surface: #000000;
+  --card: #0a0a0a;
+  --border-soft: #1f1f1f;
+  --text-main: #fafafa;
+  --text-muted: #a3a3a3;
+
+  --shadow-md: 0 18px 48px rgba(0, 0, 0, 0.65);
+  --focus-ring: 2px solid var(--brand-600);
+
+  /* Tokens @theme / shadcn: redefinidos aquí para que `bg-background`, `bg-sidebar`, etc. coheran en todo el panel */
+  --color-background: var(--surface);
+  --color-foreground: var(--text-main);
+  --color-card: var(--card);
+  --color-card-foreground: var(--text-main);
+  --color-popover: var(--card);
+  --color-popover-foreground: var(--text-main);
+  --color-primary: var(--brand-700);
+  --color-primary-foreground: #ffffff;
+  --color-border: var(--border-soft);
+  --color-input: var(--border-soft);
+  --color-ring: var(--brand-600);
+  --color-sidebar: var(--card);
+  --color-sidebar-foreground: var(--text-main);
+  --color-sidebar-primary: var(--brand-700);
+  --color-sidebar-primary-foreground: #ffffff;
+  --color-sidebar-border: var(--border-soft);
+  --color-sidebar-ring: var(--brand-600);
+
+  --color-secondary: #171717;
+  --color-secondary-foreground: var(--text-main);
+  --color-muted: #141414;
+  --color-muted-foreground: var(--text-muted);
+  --color-accent: #1a1a1a;
+  --color-accent-foreground: var(--text-main);
+  --color-sidebar-accent: #171717;
+  --color-sidebar-accent-foreground: var(--text-main);
+  --sidebar-nav-hover-bg: color-mix(in srgb, var(--brand-700) 26%, var(--surface));
+  --sidebar-nav-hover-fg: var(--brand-600);
+  --sidebar-nav-active-bg: color-mix(in srgb, var(--brand-700) 34%, var(--surface));
+  --sidebar-nav-active-fg: var(--brand-600);
+  --sidebar-nav-hover-shadow: 0 12px 28px rgba(1, 10, 8, 0.38);
+  --sidebar-nav-active-shadow: 0 14px 32px rgba(1, 10, 8, 0.48);
+}
+
+/*
+ * <select> nativos: sin color-scheme heredado, Windows/Chrome a veces muestran lista gris clara
+ * con texto claro del documento (bajo contraste). Forzamos fondo y texto en lo que el motor permita.
+ */
+.dark select {
+  color-scheme: dark;
+  background-color: var(--card);
+  color: var(--text-main);
+}
+
+.dark select:disabled {
+  opacity: 0.55;
+}
+
+.dark select option {
+  background-color: #171717;
+  color: #fafafa;
 }
 
 * { box-sizing: border-box; }
@@ -43,11 +168,23 @@ a, button {
   min-width: 44px;
 }
 
-button,
-input,
-textarea,
-select {
-  font: inherit;
+/* Sidebar: el menú ya define altura (h-8); el mínimo 44px inflaba las filas. */
+a[data-sidebar="menu-button"],
+button[data-sidebar="menu-button"],
+a[data-sidebar="menu-sub-button"] {
+  min-height: unset;
+  min-width: unset;
+}
+
+/* En @layer base para que utilidades Tailwind (p. ej. text-sm en SidebarMenuButton)
+   no queden por debajo de `font: inherit` en <button> frente a <a> en el mismo menú. */
+@layer base {
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
+  }
 }
 
 .appShell {
@@ -73,4 +210,80 @@ select {
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-md);
+}
+
+/* Sidebar admin: píldora estilo referencia para hover y sección activa. */
+[data-admin-theme="light"] [data-sidebar="menu-button"],
+[data-admin-theme="light"] [data-sidebar="menu-sub-button"] {
+  border-radius: 16px;
+  min-height: 2.35rem;
+}
+
+[data-admin-theme="light"] [data-sidebar="menu-button"]:hover,
+[data-admin-theme="light"] [data-sidebar="menu-sub-button"]:hover {
+  background: var(--sidebar-nav-hover-bg) !important;
+  color: var(--sidebar-nav-hover-fg) !important;
+  border-radius: 16px !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+[data-admin-theme="light"] [data-sidebar="menu-button"]:hover svg,
+[data-admin-theme="light"] [data-sidebar="menu-sub-button"]:hover svg {
+  color: inherit !important;
+}
+
+[data-admin-theme="light"] [data-sidebar="menu-button"][data-active="true"],
+[data-admin-theme="light"] [data-sidebar="menu-sub-button"][data-active="true"] {
+  background: var(--sidebar-nav-active-bg) !important;
+  color: var(--sidebar-nav-active-fg) !important;
+  border-radius: 14px !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+[data-admin-theme="light"] [data-sidebar="menu-button"][data-active="true"] svg,
+[data-admin-theme="light"] [data-sidebar="menu-sub-button"][data-active="true"] svg {
+  color: inherit !important;
+}
+
+[data-admin-theme="dark"] [data-sidebar="menu-button"],
+[data-admin-theme="dark"] [data-sidebar="menu-sub-button"] {
+  border-radius: 16px;
+  min-height: 2.35rem;
+}
+
+[data-slot="sidebar"][data-state="expanded"] [data-sidebar="menu-button"],
+[data-slot="sidebar"][data-state="expanded"] [data-sidebar="menu-sub-button"] {
+  width: calc(100% - 0.5rem);
+  margin-inline: auto;
+  padding-inline: 0.75rem !important;
+}
+
+[data-admin-theme="dark"] [data-sidebar="menu-button"]:hover,
+[data-admin-theme="dark"] [data-sidebar="menu-sub-button"]:hover {
+  background: var(--sidebar-nav-hover-bg) !important;
+  color: var(--sidebar-nav-hover-fg) !important;
+  border-radius: 16px !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+[data-admin-theme="dark"] [data-sidebar="menu-button"]:hover svg,
+[data-admin-theme="dark"] [data-sidebar="menu-sub-button"]:hover svg {
+  color: inherit !important;
+}
+
+[data-admin-theme="dark"] [data-sidebar="menu-button"][data-active="true"],
+[data-admin-theme="dark"] [data-sidebar="menu-sub-button"][data-active="true"] {
+  background: var(--sidebar-nav-active-bg) !important;
+  color: var(--sidebar-nav-active-fg) !important;
+  border-radius: 14px !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+[data-admin-theme="dark"] [data-sidebar="menu-button"][data-active="true"] svg,
+[data-admin-theme="dark"] [data-sidebar="menu-sub-button"][data-active="true"] svg {
+  color: inherit !important;
 }

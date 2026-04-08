@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -324,9 +325,20 @@ function CatalogoPageContent() {
                       REQUIERE RECETA
                     </span>
                   ) : null}
-                  <div className="grid size-36 place-items-center rounded-[20px] border border-[#d6e2e4] bg-white text-[2.4rem] font-extrabold tracking-[0.04em] text-[#1f6a67]">
-                    {getProductMonogram(product.nombre)}
-                  </div>
+                  {product.imageUrl ? (
+                    <Image
+                      src={product.imageUrl}
+                      alt={product.nombre}
+                      fill
+                      sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
+                      className="object-cover"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="grid size-36 place-items-center rounded-[20px] border border-[#d6e2e4] bg-white text-[2.4rem] font-extrabold tracking-[0.04em] text-[#1f6a67]">
+                      {getProductMonogram(product.nombre)}
+                    </div>
+                  )}
                 </div>
                 <div className="px-4 pt-4 pb-[14px]">
                   <h3 className="m-0 text-[1.5rem] text-[#11223a]">{product.nombre}</h3>
