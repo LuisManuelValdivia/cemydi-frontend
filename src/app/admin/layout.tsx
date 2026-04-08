@@ -1,4 +1,6 @@
 import type { ReactNode } from "react"
+import { cookies } from "next/headers"
+import { redirect } from "next/navigation"
 import NextTopLoader from "nextjs-toploader"
 
 import { AdminThemeProvider } from "./components/admin-theme-provider"
@@ -6,7 +8,41 @@ import { AppSidebar } from "./components/app-sidebar"
 import { DashboardHeader } from "./components/dashboard-header"
 import { SidebarInset, SidebarProvider } from "./components/ui/sidebar"
 
-export default function AdminLayout({ children }: { children: ReactNode }) {
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000"
+
+async function requireAdminSession() {
+  const cookieStore = await cookies()
+  const cookieHeader = cookieStore.toString()
+
+  if (!cookieHeader) {
+    redirect("/login")
+  }
+
+  try {
+    const res = await fetch(`${API_URL}/users/me`, {
+      method: "GET",
+      headers: {
+        cookie: cookieHeader,
+      },
+      cache: "no-store",
+    })
+
+    if (!res.ok) {
+      redirect("/login")
+    }
+
+    const result = (await res.json()) as { user?: { rol?: string } }
+    if (result?.user?.rol !== "ADMIN") {
+      redirect("/perfil")
+    }
+  } catch {
+    redirect("/login")
+  }
+}
+
+export default async function AdminLayout({ children }: { children: ReactNode }) {
+  await requireAdminSession()
+
   return (
     <>
       <NextTopLoader

@@ -44,8 +44,9 @@ export default function Header() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const shouldHideHeader = pathname.startsWith("/admin");
 
-  if (pathname.startsWith("/admin")) {
+  if (shouldHideHeader) {
     return null;
   }
 
@@ -128,7 +129,9 @@ export default function Header() {
         </Link>
 
         {loading ? (
-          <span className="rounded-full px-[10px] py-2 font-bold text-white">...</span>
+          <span className="rounded-full px-[10px] py-2 font-bold text-white" aria-hidden="true">
+            ...
+          </span>
         ) : !user ? (
           <>
             <Link

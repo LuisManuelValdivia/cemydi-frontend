@@ -3,6 +3,13 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 export type UserRole = "ADMIN" | "CLIENT";
 export type ProductMode = "VENTA" | "RENTA" | "MIXTO";
 
+export type ProductImage = {
+  id: number;
+  imageUrl: string;
+  sortOrder: number;
+  createdAt: string;
+};
+
 export type AdminUser = {
   id: number;
   nombre: string;
@@ -11,6 +18,8 @@ export type AdminUser = {
   direccion: string | null;
   rol: UserRole;
   activo: boolean;
+  emailVerified: boolean;
+  emailVerifiedAt: string | null;
   createdAt?: string;
 };
 
@@ -28,12 +37,7 @@ export type AdminProduct = {
   requiereReceta: boolean;
   activo: boolean;
   imageUrl: string | null;
-  images: Array<{
-    id: number;
-    imageUrl: string;
-    sortOrder: number;
-    createdAt: string;
-  }>;
+  images: ProductImage[];
   createdAt?: string;
 };
 
@@ -110,78 +114,27 @@ export type DatabaseStatus = {
   isOnline: boolean;
   databaseName: string;
   dbVersion: string;
-  initializedAt: string | null;
-  databaseAgeSeconds: number;
+  uptimeSeconds: number;
   sizeBytes: number;
   sizePretty: string;
-  overview: {
-    totalTables: number;
-    totalIndexes: number;
-    totalRows: number;
-    totalSizeBytes: number;
-    totalSizePretty: string;
-  };
   connections: {
     total: number;
     active: number;
     idle: number;
-    idleInTransaction: number;
-    internal: number;
-    other: number;
-    items: Array<{
-      pid: number;
-      userName: string;
-      state: string;
-      clientAddress: string;
-      applicationName: string;
-      backendType: string;
-    }>;
   };
-  users: Array<{
-    userName: string;
-    totalConnections: number;
-    activeConnections: number;
-    internalConnections: number;
-  }>;
-  indexes: Array<{
-    indexName: string;
-    tableName: string;
-    scans: number;
-    sizeBytes: number;
-    sizePretty: string;
-  }>;
+  transactions: {
+    commits: number;
+    rollbacks: number;
+  };
   tables: {
     totalRows: number;
     totalSizeBytes: number;
     totalSizePretty: string;
-    totalIndexes: number;
     items: Array<{
       tableName: string;
       rowCount: number;
-      sequentialScans: number;
-      indexScans: number;
-      totalQueries: number;
-      totalSizeBytes: number;
-      totalSizePretty: string;
-      tableSizeBytes: number;
-      tableSizePretty: string;
-      indexSizeBytes: number;
-      indexSizePretty: string;
-      indexUsagePercent: number;
-    }>;
-    topQueried: Array<{
-      tableName: string;
-      rowCount: number;
-      sequentialScans: number;
-      indexScans: number;
-      totalQueries: number;
-      totalSizeBytes: number;
-      totalSizePretty: string;
-      tableSizeBytes: number;
-      tableSizePretty: string;
-      indexSizeBytes: number;
-      indexSizePretty: string;
-      indexUsagePercent: number;
+      sizeBytes: number;
+      sizePretty: string;
     }>;
   };
   backup: {
@@ -194,41 +147,8 @@ export type DatabaseStatus = {
 export type DatabaseBackupRecord = {
   id: number;
   fileName: string;
-  origin: "MANUAL" | "AUTOMATIC" | "TABLE";
   sizeBytes: number;
   createdAt: string;
-};
-
-export type DatabaseBackupCreationResult = {
-  backup: DatabaseBackupRecord;
-  message: string;
-  logText: string;
-};
-
-export type MaintenanceOperation = "VACUUM" | "ANALYZE" | "VACUUM_ANALYZE";
-
-export type MaintenanceRunResult = {
-  operation: MaintenanceOperation;
-  schemaName: string | null;
-  tableName: string | null;
-  processedTables: number;
-  startedAt: string;
-  finishedAt: string;
-  logText: string;
-  message: string;
-};
-
-export type MaintenanceSchedule = {
-  enabled: boolean;
-  everyDays: number;
-  runAtTime: string;
-  operation: MaintenanceOperation;
-  schemaName: string | null;
-  tableName: string | null;
-  lastRunAt: string | null;
-  nextRunAt: string | null;
-  createdAt: string;
-  updatedAt: string;
 };
 
 export type DatabaseBackupSchedule = {
@@ -236,7 +156,6 @@ export type DatabaseBackupSchedule = {
   everyDays: number;
   runAtTime: string;
   retentionDays: number;
-  schemaName: string | null;
   lastRunAt: string | null;
   nextRunAt: string | null;
   createdAt: string;
@@ -298,10 +217,13 @@ export type CreateProductPayload = {
   tipoAdquisicion: ProductMode;
   requiereReceta: boolean;
   activo: boolean;
-  imageUrls?: string[];
 };
 
-export type UpdateProductPayload = Partial<CreateProductPayload> & {
+export type UpdateProductPayload = Partial<CreateProductPayload>;
+
+type ProductMutationOptions = {
+  files?: File[];
+  imageUrls?: string[];
   keepImageIds?: number[];
 };
 
@@ -338,14 +260,9 @@ export type UpdatePromotionPayload = {
 
 function resolveErrorMessage(result: unknown, fallback: string) {
   if (typeof result === "object" && result !== null && "message" in result) {
-    const message = (result as {
-      message?: string | string[] | { message?: string };
-    }).message;
+    const message = (result as { message?: string | string[] }).message;
     if (Array.isArray(message)) return message.join(", ");
     if (typeof message === "string") return message;
-    if (typeof message === "object" && message && typeof message.message === "string") {
-      return message.message;
-    }
   }
   return fallback;
 }
@@ -374,11 +291,10 @@ function resolveFileNameFromDisposition(
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const isFormDataBody =
-    typeof FormData !== "undefined" && init?.body instanceof FormData;
+  const isFormData = init?.body instanceof FormData;
   const headers: Record<string, string> = {};
 
-  if (!isFormDataBody) {
+  if (!isFormData) {
     headers["Content-Type"] = "application/json";
   }
 
@@ -395,14 +311,45 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const result = await res.json();
 
   if (!res.ok) {
-    const error = new Error(resolveErrorMessage(result, "Error en la solicitud")) as Error & {
-      payload?: unknown;
-    };
-    error.payload = result;
-    throw error;
+    throw new Error(resolveErrorMessage(result, "Error en la solicitud"));
   }
 
   return result as T;
+}
+
+function appendProductPayloadToFormData(
+  formData: FormData,
+  payload: CreateProductPayload | UpdateProductPayload
+) {
+  Object.entries(payload).forEach(([key, value]) => {
+    if (value === undefined || value === null) return;
+    formData.append(key, String(value));
+  });
+}
+
+function buildProductFormData(
+  payload: CreateProductPayload | UpdateProductPayload,
+  options?: ProductMutationOptions
+) {
+  const formData = new FormData();
+
+  appendProductPayloadToFormData(formData, payload);
+
+  options?.imageUrls?.forEach((imageUrl) => {
+    if (imageUrl.trim()) {
+      formData.append("imageUrls", imageUrl.trim());
+    }
+  });
+
+  options?.keepImageIds?.forEach((imageId) => {
+    formData.append("keepImageIds", String(imageId));
+  });
+
+  options?.files?.forEach((file) => {
+    formData.append("images", file);
+  });
+
+  return formData;
 }
 
 export function listUsers() {
@@ -435,22 +382,41 @@ export function listProducts() {
   });
 }
 
+export function getProduct(id: number, includeInactive = true) {
+  const query = includeInactive ? "?includeInactive=true" : "";
+  return request<{ product: AdminProduct }>(`/products/${id}${query}`, {
+    method: "GET",
+  });
+}
+
 export function createProduct(
-  payload: CreateProductPayload & { imageFiles?: File[] },
+  payload: CreateProductPayload,
+  options?: ProductMutationOptions
 ) {
+  const body =
+    options?.files?.length || options?.imageUrls?.length
+      ? buildProductFormData(payload, options)
+      : JSON.stringify(payload);
+
   return request<{ product: AdminProduct; message: string }>("/products", {
     method: "POST",
-    body: buildProductFormData(payload),
+    body,
   });
 }
 
 export function updateProduct(
   id: number,
-  payload: UpdateProductPayload & { imageFiles?: File[] },
+  payload: UpdateProductPayload,
+  options?: ProductMutationOptions
 ) {
+  const body =
+    options?.files?.length || options?.imageUrls?.length || options?.keepImageIds
+      ? buildProductFormData(payload, options)
+      : JSON.stringify(payload);
+
   return request<{ product: AdminProduct; message: string }>(`/products/${id}`, {
     method: "PATCH",
-    body: buildProductFormData(payload),
+    body,
   });
 }
 
@@ -458,37 +424,6 @@ export function deleteProduct(id: number) {
   return request<{ message: string }>(`/products/${id}`, {
     method: "DELETE",
   });
-}
-
-export function buildProductFormData(payload: UpdateProductPayload & {
-  imageFiles?: File[];
-}) {
-  const formData = new FormData();
-
-  Object.entries(payload).forEach(([key, value]) => {
-    if (value === undefined || value === null) {
-      return;
-    }
-
-    if (key === "imageUrls" && Array.isArray(value)) {
-      value.forEach((item) => formData.append("imageUrls", String(item)));
-      return;
-    }
-
-    if (key === "keepImageIds" && Array.isArray(value)) {
-      value.forEach((item) => formData.append("keepImageIds", String(item)));
-      return;
-    }
-
-    if (key === "imageFiles" && Array.isArray(value)) {
-      (value as File[]).forEach((file) => formData.append("images", file));
-      return;
-    }
-
-    formData.append(key, String(value));
-  });
-
-  return formData;
 }
 
 export function listCatalogs() {
@@ -506,8 +441,8 @@ export function createBrand(payload: CreateCatalogOptionPayload) {
 }
 
 export function updateBrand(id: number, payload: CreateCatalogOptionPayload) {
-  return request<{ brand: BrandOption; message: string }>(`/catalogs/brands/${id}/update`, {
-    method: "POST",
+  return request<{ brand: BrandOption; message: string }>(`/catalogs/brands/${id}`, {
+    method: "PATCH",
     body: JSON.stringify(payload),
   });
 }
@@ -530,9 +465,9 @@ export function createClassification(payload: CreateCatalogOptionPayload) {
 
 export function updateClassification(id: number, payload: CreateCatalogOptionPayload) {
   return request<{ classification: ClassificationOption; message: string }>(
-    `/catalogs/classifications/${id}/update`,
+    `/catalogs/classifications/${id}`,
     {
-      method: "POST",
+      method: "PATCH",
       body: JSON.stringify(payload),
     }
   );
@@ -655,66 +590,22 @@ export function listDatabaseBackups() {
 }
 
 export function createDatabaseBackupRecord() {
-  return request<DatabaseBackupCreationResult>("/backups/database", {
+  return request<{
+    backup: DatabaseBackupRecord;
+    message: string;
+  }>("/backups/database", {
     method: "POST",
   });
 }
 
 export function createSingleTableDatabaseBackupRecord(tableName: string) {
-  return request<DatabaseBackupCreationResult>("/backups/database/table", {
+  return request<{
+    backup: DatabaseBackupRecord;
+    message: string;
+  }>("/backups/database/table", {
     method: "POST",
     body: JSON.stringify({ tableName }),
   });
-}
-
-export function createSingleSchemaDatabaseBackupRecord(schemaName: string) {
-  return request<DatabaseBackupCreationResult>("/backups/database/schema", {
-    method: "POST",
-    body: JSON.stringify({ schemaName }),
-  });
-}
-
-export function runMaintenance(payload: {
-  operation: MaintenanceOperation;
-  schemaName?: string | null;
-  tableName?: string | null;
-}) {
-  return request<MaintenanceRunResult>("/maintenance/run", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-}
-
-export function getMaintenanceSchedule() {
-  return request<{ schedule: MaintenanceSchedule }>("/maintenance/schedule", {
-    method: "GET",
-  });
-}
-
-export function updateMaintenanceSchedule(payload: {
-  enabled: boolean;
-  everyDays: number;
-  runAtTime: string;
-  operation: MaintenanceOperation;
-  schemaName?: string | null;
-  tableName?: string | null;
-}) {
-  return request<{ schedule: MaintenanceSchedule; message: string }>(
-    "/maintenance/schedule",
-    {
-      method: "PUT",
-      body: JSON.stringify(payload),
-    }
-  );
-}
-
-export function deleteMaintenanceSchedule() {
-  return request<{ schedule: MaintenanceSchedule; message: string }>(
-    "/maintenance/schedule",
-    {
-      method: "DELETE",
-    }
-  );
 }
 
 export function deleteDatabaseBackupRecord(id: number) {
@@ -800,7 +691,6 @@ export function updateDatabaseBackupSchedule(payload: {
   everyDays: number;
   runAtTime: string;
   retentionDays: number;
-  schemaName?: string | null;
 }) {
   return request<{
     schedule: DatabaseBackupSchedule;

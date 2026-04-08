@@ -16,11 +16,11 @@ export function useAdminRouteGate() {
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
-      router.push("/login");
+      router.replace("/login");
       return;
     }
     if (user.rol !== "ADMIN") {
-      router.push("/perfil");
+      router.replace("/perfil");
     }
   }, [authLoading, router, user]);
 

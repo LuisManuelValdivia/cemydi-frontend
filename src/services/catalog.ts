@@ -1,5 +1,12 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
+export type CatalogProductImage = {
+  id: number;
+  imageUrl: string;
+  sortOrder: number;
+  createdAt: string;
+};
+
 export type CatalogProduct = {
   id: number;
   nombre: string;
@@ -14,12 +21,7 @@ export type CatalogProduct = {
   requiereReceta: boolean;
   activo: boolean;
   imageUrl: string | null;
-  images: Array<{
-    id: number;
-    imageUrl: string;
-    sortOrder: number;
-    createdAt: string;
-  }>;
+  images: CatalogProductImage[];
   createdAt: string;
 };
 

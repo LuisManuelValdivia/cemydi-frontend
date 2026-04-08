@@ -6,8 +6,9 @@ import { usePathname } from "next/navigation";
 
 export default function Footer() {
   const pathname = usePathname();
+  const shouldHideFooter = pathname.startsWith("/admin");
 
-  if (pathname.startsWith("/admin")) {
+  if (shouldHideFooter) {
     return null;
   }
 

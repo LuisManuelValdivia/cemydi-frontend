@@ -70,6 +70,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = ({ user }: { user: User }) => {
     setUser(user);
+    setLoading(false);
   };
 
   const updateUser = (nextUser: User) => {
@@ -81,11 +82,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.removeItem(key);
     }
     setUser(null);
+    setLoading(false);
   };
 
   const value = useMemo(
     () => ({ user, loading, login, updateUser, logout }),
-    [user, loading]
+    [user, loading],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

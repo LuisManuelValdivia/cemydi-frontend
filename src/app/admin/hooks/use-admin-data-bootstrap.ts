@@ -29,12 +29,13 @@ export function useAdminDataBootstrap({
     if (authLoading) return;
 
     if (!user) {
-      router.push("/login");
+      setInitLoading(false);
+      router.replace("/login");
       return;
     }
 
     if (user.rol !== "ADMIN") {
-      router.push("/perfil");
+      router.replace("/perfil");
       setInitLoading(false);
       return;
     }
