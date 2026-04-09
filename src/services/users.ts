@@ -9,17 +9,8 @@ type UpdateProfilePayload = {
 };
 
 export async function getMyProfile() {
-  const headers: Record<string, string> = {};
-  if (typeof document !== "undefined") {
-    const match = document.cookie.match(/(?:^|; )cemydi_access=([^;]+)/);
-    if (match) {
-      headers["Authorization"] = `Bearer ${match[1]}`;
-    }
-  }
-
   const res = await fetch(`${API_URL}/users/me`, {
     method: "GET",
-    headers,
     credentials: "include",
   });
 
@@ -53,19 +44,11 @@ export async function getMyProfile() {
 }
 
 export async function updateMyProfile(data: UpdateProfilePayload) {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
-  if (typeof document !== "undefined") {
-    const match = document.cookie.match(/(?:^|; )cemydi_access=([^;]+)/);
-    if (match) {
-      headers["Authorization"] = `Bearer ${match[1]}`;
-    }
-  }
-
   const res = await fetch(`${API_URL}/users/me`, {
     method: "PATCH",
-    headers,
+    headers: {
+      "Content-Type": "application/json",
+    },
     credentials: "include",
     body: JSON.stringify(data),
   });

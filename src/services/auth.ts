@@ -58,7 +58,7 @@ export async function loginUser(data: {
     body: JSON.stringify(data),
   });
 
-  return parseResponse<{ user: AuthUser; accessToken?: string }>(res, "Error al iniciar sesión");
+  return parseResponse<{ user: AuthUser }>(res, "Error al iniciar sesión");
 }
 
 export async function resendVerificationEmail(correo: string) {
@@ -140,10 +140,6 @@ export async function logoutUser() {
     method: "POST",
     credentials: "include",
   });
-
-  if (typeof document !== "undefined") {
-    document.cookie = "cemydi_access=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-  }
 
   return parseResponse<{ message: string }>(res, "No se pudo cerrar sesión");
 }
