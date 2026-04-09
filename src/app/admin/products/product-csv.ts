@@ -12,6 +12,7 @@ export const PRODUCT_CSV_COLUMNS = [
   { key: "tipoAdquisicion", label: "TipoAdquisición", required: true },
   { key: "requiereReceta", label: "RequiereReceta", required: false },
   { key: "activo", label: "Activo", required: false },
+  { key: "imageUrls", label: "ImageUrls", required: false },
 ] as const;
 
 export type ProductCsvColumnKey = (typeof PRODUCT_CSV_COLUMNS)[number]["key"];
@@ -28,6 +29,7 @@ export type ProductImportPayload = {
   tipoAdquisicion: ProductMode;
   requiereReceta: boolean;
   activo: boolean;
+  imageUrls?: string[];
 };
 
 export type ProductCsvImportRow = {
@@ -92,6 +94,7 @@ const PRODUCT_CSV_HEADER_ALIASES: Record<ProductCsvColumnKey, string[]> = {
   tipoAdquisicion: ["tipoadquisicion", "tipo_adquisicion", "tipo"],
   requiereReceta: ["requierereceta", "requiere_receta", "receta"],
   activo: ["activo", "estado"],
+  imageUrls: ["imageurls", "imageurl", "imagenes", "imagenurls", "imagenurl"],
 };
 
 export const PRODUCT_CSV_REQUIRED_COLUMN_KEYS: ProductCsvColumnKey[] =
@@ -110,6 +113,7 @@ const PRODUCT_CSV_TEMPLATE_SAMPLE_ROWS: ProductCsvTemplateRow[] = [
     tipoAdquisicion: "VENTA",
     requiereReceta: "False",
     activo: "True",
+    imageUrls: "https://example.com/silla-ruedas-1.jpg|https://example.com/silla-ruedas-2.jpg",
   },
   {
     nombre: "Tanque oxígeno 680L",
@@ -123,6 +127,7 @@ const PRODUCT_CSV_TEMPLATE_SAMPLE_ROWS: ProductCsvTemplateRow[] = [
     tipoAdquisicion: "RENTA",
     requiereReceta: "True",
     activo: "True",
+    imageUrls: "https://example.com/tanque-oxigeno-1.jpg|https://example.com/tanque-oxigeno-2.jpg",
   },
 ];
 
@@ -211,6 +216,22 @@ function normalizeProductMode(value: string) {
   return null;
 }
 
+export function isValidImageUrl(value: string) {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+export function parseProductImageUrlsCell(value: string) {
+  return value
+    .split(/\r?\n|\|/g)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 type CsvRowFormCandidate = {
   nombre: string;
   marca: string;
@@ -277,6 +298,9 @@ export function getProductCsvValue(product: AdminProduct, column: ProductCsvColu
   if (column === "proveedor") return product.proveedor;
   if (column === "tipoAdquisicion") return product.tipoAdquisicion;
   if (column === "requiereReceta") return product.requiereReceta ? "True" : "False";
+  if (column === "imageUrls") {
+    return product.images.map((image) => image.imageUrl).join("|");
+  }
   return product.activo ? "True" : "False";
 }
 
@@ -378,6 +402,7 @@ export function createProductImportPreview(
     tipoAdquisicion: -1,
     requiereReceta: -1,
     activo: -1,
+    imageUrls: -1,
   };
 
   PRODUCT_CSV_COLUMNS.forEach((column) => {
@@ -417,6 +442,7 @@ export function createProductImportPreview(
     const tipoAdquisicionRaw = readCell("tipoAdquisicion");
     const requiereRecetaRaw = readCell("requiereReceta");
     const activoRaw = readCell("activo");
+    const imageUrlsRaw = readCell("imageUrls");
 
     const joinedRow = [
       nombre,
@@ -430,6 +456,7 @@ export function createProductImportPreview(
       tipoAdquisicionRaw,
       requiereRecetaRaw,
       activoRaw,
+      imageUrlsRaw,
     ]
       .join("")
       .trim();
@@ -452,6 +479,12 @@ export function createProductImportPreview(
     const activo = normalizeBooleanCell(activoRaw, true);
     if (activo === null && !validationError) {
       validationError = "Valor inválido en activo. Usa true o false.";
+    }
+
+    const imageUrls = parseProductImageUrlsCell(imageUrlsRaw);
+    if (!validationError && imageUrls.some((item) => !isValidImageUrl(item))) {
+      validationError =
+        "Las imágenes del CSV deben ser URLs http o https separadas por |.";
     }
 
     const formCandidate: CsvRowFormCandidate = {
@@ -485,6 +518,7 @@ export function createProductImportPreview(
       tipoAdquisicion: tipoAdquisicion ?? "VENTA",
       requiereReceta: requiereReceta ?? false,
       activo: activo ?? true,
+      imageUrls,
     };
 
     parsedRows.push({

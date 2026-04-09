@@ -19,10 +19,13 @@ async function requireAdminSession() {
   }
 
   try {
+    const token = cookieStore.get("cemydi_access")?.value;
+
     const res = await fetch(`${API_URL}/users/me`, {
       method: "GET",
       headers: {
         cookie: cookieHeader,
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       cache: "no-store",
     })

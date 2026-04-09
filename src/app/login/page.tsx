@@ -107,6 +107,10 @@ export default function LoginPage() {
 
       const result = await loginUser(form);
 
+      if (result.accessToken) {
+        document.cookie = `cemydi_access=${result.accessToken}; path=/; max-age=86400; secure; samesite=lax`;
+      }
+
       login({ user: result.user });
 
       toast.success("Bienvenido");
