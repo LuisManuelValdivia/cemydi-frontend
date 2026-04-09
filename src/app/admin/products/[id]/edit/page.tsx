@@ -143,6 +143,7 @@ export default function EditProductPage() {
   >([]);
   const [form, setForm] = useState<ProductDraftState>(initialDraftState);
   const [imageUploadItems, setImageUploadItems] = useState<UploadedFile[]>([]);
+  const [productImageUrlInput, setProductImageUrlInput] = useState("");
   const imageProgressTimersRef = useRef<Map<string, ReturnType<typeof setInterval>>>(
     new Map(),
   );
@@ -339,6 +340,46 @@ export default function EditProductPage() {
     });
   };
 
+  const addProductImageUrl = () => {
+    const rawUrl = productImageUrlInput.trim();
+    if (!rawUrl) return;
+
+    if (!rawUrl.startsWith("http://") && !rawUrl.startsWith("https://")) {
+      toast.error("La URL de imagen debe usar http o https.");
+      return;
+    }
+
+    const existingUrls = new Set(imageUploadItems.map((item) => item.previewUrl));
+    if (existingUrls.has(rawUrl)) {
+      toast.error("Esta imagen ya fue agregada.");
+      return;
+    }
+
+    if (imageUploadItems.length >= PRODUCT_MAX_IMAGES) {
+      toast.error(`Máximo ${PRODUCT_MAX_IMAGES} imágenes.`);
+      return;
+    }
+
+    let name = "Imagen desde URL";
+    try {
+      name = new URL(rawUrl).pathname.split("/").pop() || name;
+    } catch {
+      // Ignorar
+    }
+
+    setImageUploadItems((prev) => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        previewUrl: rawUrl,
+        progress: 100,
+        status: "completed",
+        name,
+      },
+    ]);
+    setProductImageUrlInput("");
+  };
+
   useEffect(() => {
     for (const item of imageUploadItems) {
       if (item.status !== "uploading") continue;
@@ -383,6 +424,9 @@ export default function EditProductPage() {
       const response = await updateProduct(productId, normalizeProductPayload(payload), {
         files: imageUploadItems.flatMap((item) =>
           item.serverImageId || !item.file ? [] : [item.file],
+        ),
+        imageUrls: imageUploadItems.flatMap((item) =>
+          !item.serverImageId && !item.file && item.previewUrl ? [item.previewUrl] : [],
         ),
         keepImageIds: imageUploadItems.flatMap((item) =>
           item.serverImageId ? [item.serverImageId] : [],
@@ -726,6 +770,29 @@ export default function EditProductPage() {
                   formatsHint="Varias imágenes a la vez si hay cupo. Máx. 8 MB por archivo."
                   browseLabel="Examinar archivos"
                 />
+
+                <div className="flex w-full items-center gap-2 rounded-2xl border border-border bg-card p-4">
+                  <Input
+                    className="flex-1"
+                    placeholder="O pega una URL: https://ejemplo.com/imagen.jpg"
+                    value={productImageUrlInput}
+                    onChange={(e) => setProductImageUrlInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addProductImageUrl();
+                      }
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={addProductImageUrl}
+                    disabled={!productImageUrlInput.trim()}
+                  >
+                    Agregar URL
+                  </Button>
+                </div>
               </div>
             </section>
 

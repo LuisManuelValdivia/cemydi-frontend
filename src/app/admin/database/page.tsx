@@ -73,6 +73,12 @@ import {
   getDatabaseStatus,
   listDatabaseBackups,
   updateDatabaseBackupSchedule,
+  runMaintenance,
+  getMaintenanceSchedule,
+  updateMaintenanceSchedule,
+  deleteMaintenanceSchedule,
+  type MaintenanceOperation,
+  type MaintenanceSchedule,
 } from "@/services/admin";
 
 const BACKUP_PAGE_SIZE = 10;
@@ -85,7 +91,25 @@ const defaultScheduleForm = {
 };
 
 type ScheduleFormState = typeof defaultScheduleForm;
-type MainTab = "monitoreo" | "seguridad" | "respaldos";
+type MainTab = "monitoreo" | "seguridad" | "respaldos" | "mantenimiento";
+
+type MaintenanceFormState = {
+  enabled: boolean;
+  everyDays: string;
+  runAtTime: string;
+  operation: MaintenanceOperation;
+  schemaName: string;
+  tableName: string;
+};
+
+const defaultMaintenanceForm: MaintenanceFormState = {
+  enabled: false,
+  everyDays: "1",
+  runAtTime: "04:00",
+  operation: "VACUUM_ANALYZE",
+  schemaName: "public",
+  tableName: "",
+};
 
 type PendingAction =
   | { kind: "delete-backup"; backup: DatabaseBackupRecord }
@@ -509,6 +533,12 @@ export default function DatabaseMonitoringPage() {
   const [deletingBackupId, setDeletingBackupId] = useState<number | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
 
+  const [maintenanceSchedule, setMaintenanceSchedule] = useState<MaintenanceSchedule | null>(null);
+  const [maintenanceForm, setMaintenanceForm] = useState<MaintenanceFormState>(defaultMaintenanceForm);
+  const [loadingMaintenanceSchedule, setLoadingMaintenanceSchedule] = useState(false);
+  const [savingMaintenanceSchedule, setSavingMaintenanceSchedule] = useState(false);
+  const [runningMaintenance, setRunningMaintenance] = useState(false);
+
   const [allSessionsOpen, setAllSessionsOpen] = useState(false);
   const [allAuditOpen, setAllAuditOpen] = useState(false);
   const [mainTab, setMainTab] = useState<MainTab>("monitoreo");
@@ -577,6 +607,22 @@ export default function DatabaseMonitoringPage() {
       );
     } finally {
       setLoadingBackupSchedule(false);
+    }
+  }, []);
+
+  const loadMaintenanceScheduleData = useCallback(async () => {
+    try {
+      setLoadingMaintenanceSchedule(true);
+      const result = await getMaintenanceSchedule();
+      setMaintenanceSchedule(result.schedule);
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "No se pudo cargar la programación de mantenimiento.",
+      );
+    } finally {
+      setLoadingMaintenanceSchedule(false);
     }
   }, []);
 
@@ -664,6 +710,7 @@ export default function DatabaseMonitoringPage() {
         loadAuthSecurityOverviewData(),
         loadBackupRecordsData(),
         loadBackupScheduleData(),
+        loadMaintenanceScheduleData(),
       ]);
       if (!cancelled) {
         setInitialLoading(false);
@@ -681,13 +728,15 @@ export default function DatabaseMonitoringPage() {
     loadAuthSecurityOverviewData,
     loadBackupRecordsData,
     loadBackupScheduleData,
+    loadMaintenanceScheduleData,
   ]);
 
   const anyLoading =
     loadingAuthSecurityOverview ||
     loadingDbStatus ||
     loadingBackupRecords ||
-    loadingBackupSchedule;
+    loadingBackupSchedule ||
+    loadingMaintenanceSchedule;
 
   async function refreshAllData() {
     if (!user) return;
@@ -696,6 +745,7 @@ export default function DatabaseMonitoringPage() {
       loadAuthSecurityOverviewData(),
       loadBackupRecordsData(),
       loadBackupScheduleData(),
+      loadMaintenanceScheduleData(),
     ]);
     toast.success("Datos actualizados.");
   }
@@ -770,6 +820,88 @@ export default function DatabaseMonitoringPage() {
       );
     } finally {
       setGeneratingTableBackup(false);
+    }
+  }
+
+  useEffect(() => {
+    if (maintenanceSchedule) {
+      setMaintenanceForm({
+        enabled: maintenanceSchedule.enabled,
+        everyDays: String(maintenanceSchedule.everyDays),
+        runAtTime: maintenanceSchedule.runAtTime,
+        operation: maintenanceSchedule.operation,
+        schemaName: maintenanceSchedule.schemaName || "public",
+        tableName: maintenanceSchedule.tableName || "",
+      });
+    } else {
+      setMaintenanceForm(defaultMaintenanceForm);
+    }
+  }, [maintenanceSchedule]);
+
+  async function handleRunMaintenance() {
+    if (!user) return;
+    try {
+      setRunningMaintenance(true);
+      const payload = {
+        operation: maintenanceForm.operation,
+        schemaName: maintenanceForm.schemaName || null,
+        tableName: maintenanceForm.tableName || null,
+      };
+      await runMaintenance(payload);
+      toast.success("Mantenimiento ejecutado exitosamente.");
+      await loadDatabaseStats();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Error al ejecutar mantenimiento.");
+    } finally {
+      setRunningMaintenance(false);
+    }
+  }
+
+  async function handleSaveMaintenanceSchedule(e: React.FormEvent) {
+    e.preventDefault();
+    if (!user) return;
+    const everyDays = Number(maintenanceForm.everyDays);
+    if (!Number.isInteger(everyDays) || everyDays < 1) {
+      toast.error("Los días deben ser un número válido.");
+      return;
+    }
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(maintenanceForm.runAtTime.trim())) {
+      toast.error("La hora debe tener formato HH:mm.");
+      return;
+    }
+
+    try {
+      setSavingMaintenanceSchedule(true);
+      const payload = {
+        enabled: maintenanceForm.enabled,
+        everyDays,
+        runAtTime: maintenanceForm.runAtTime,
+        operation: maintenanceForm.operation,
+        schemaName: maintenanceForm.schemaName || null,
+        tableName: maintenanceForm.tableName || null,
+      };
+      const result = await updateMaintenanceSchedule(payload);
+      setMaintenanceSchedule(result.schedule);
+      toast.success("Programación de mantenimiento actualizada.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Error al guardar programación.");
+    } finally {
+      setSavingMaintenanceSchedule(false);
+    }
+  }
+
+  async function handleRemoveMaintenanceSchedule() {
+    if (!user) return;
+    if (!window.confirm("¿Seguro que deseas eliminar la programación de mantenimiento?")) return;
+    try {
+      setSavingMaintenanceSchedule(true);
+      const result = await deleteMaintenanceSchedule();
+      setMaintenanceSchedule(result.schedule || null);
+      toast.success("Programación de mantenimiento eliminada.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Error al eliminar programación.");
+    } finally {
+      setSavingMaintenanceSchedule(false);
     }
   }
 
@@ -988,6 +1120,7 @@ export default function DatabaseMonitoringPage() {
             { id: "monitoreo", label: "Monitoreo", count: dbTableItems.length },
             { id: "seguridad", label: "Seguridad", count: loginAuditItems.length },
             { id: "respaldos", label: "Respaldos", count: backupRecords.length },
+            { id: "mantenimiento", label: "Mantenimiento", count: maintenanceSchedule?.enabled ? 1 : 0 },
           ]}
           activeId={mainTab}
           onChange={(id) => setMainTab(id as MainTab)}
@@ -1544,6 +1677,112 @@ export default function DatabaseMonitoringPage() {
           </Card>
         </div>
         </section>
+        ) : null}
+
+        {mainTab === "mantenimiento" ? (
+          <section className="grid gap-6 md:grid-cols-2">
+            <Card className="rounded-[28px] border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Database className="size-5 text-primary" />
+                  Mantenimiento Manual
+                </CardTitle>
+                <CardDescription>
+                  Ejecuta VACUUM o ANALYZE manualmente.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-4">
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium">Operación</label>
+                  <select
+                    className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value={maintenanceForm.operation}
+                    onChange={(e) => setMaintenanceForm((prev) => ({ ...prev, operation: e.target.value as MaintenanceOperation }))}
+                  >
+                    <option value="VACUUM">VACUUM (Limpiar)</option>
+                    <option value="ANALYZE">ANALYZE (Estadísticas)</option>
+                    <option value="VACUUM_ANALYZE">VACUUM ANALYZE (Ambos)</option>
+                  </select>
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium">Esquema</label>
+                  <Input
+                    placeholder="public"
+                    value={maintenanceForm.schemaName}
+                    onChange={(e) => setMaintenanceForm((prev) => ({ ...prev, schemaName: e.target.value }))}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium">Tabla (Opcional)</label>
+                  <Input
+                    placeholder="Ej. users"
+                    value={maintenanceForm.tableName}
+                    onChange={(e) => setMaintenanceForm((prev) => ({ ...prev, tableName: e.target.value }))}
+                  />
+                </div>
+                <Button onClick={handleRunMaintenance} disabled={runningMaintenance}>
+                  {runningMaintenance ? "Ejecutando..." : "Ejecutar ahora"}
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card className="rounded-[28px] border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+              <form onSubmit={handleSaveMaintenanceSchedule}>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <CalendarClock className="size-5 text-primary" />
+                    Mantenimiento Automático
+                  </CardTitle>
+                  <CardDescription>Configura tareas periódicas.</CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-4">
+                  <label className="flex items-center gap-2 text-sm font-medium">
+                    <input
+                      type="checkbox"
+                      checked={maintenanceForm.enabled}
+                      onChange={(e) => setMaintenanceForm((prev) => ({ ...prev, enabled: e.target.checked }))}
+                    />
+                    Habilitar mantenimiento automático
+                  </label>
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium">Cada cuántos días</label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={maintenanceForm.everyDays}
+                      onChange={(e) => setMaintenanceForm((prev) => ({ ...prev, everyDays: e.target.value }))}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium">A qué hora (HH:mm)</label>
+                    <Input
+                      type="time"
+                      value={maintenanceForm.runAtTime}
+                      onChange={(e) => setMaintenanceForm((prev) => ({ ...prev, runAtTime: e.target.value }))}
+                    />
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button type="submit" disabled={savingMaintenanceSchedule}>
+                      {savingMaintenanceSchedule ? "Guardando..." : "Programar"}
+                    </Button>
+                    {maintenanceSchedule?.enabled && (
+                      <Button type="button" variant="destructive" onClick={handleRemoveMaintenanceSchedule} disabled={savingMaintenanceSchedule}>
+                        Eliminar
+                      </Button>
+                    )}
+                  </div>
+
+                  {maintenanceSchedule && (
+                    <div className="mt-4 rounded-lg bg-muted p-4 text-xs">
+                      <p>Última: {formatScheduleDateTime(maintenanceSchedule.lastRunAt)}</p>
+                      <p>Próxima: {formatScheduleDateTime(maintenanceSchedule.nextRunAt)}</p>
+                    </div>
+                  )}
+                </CardContent>
+              </form>
+            </Card>
+          </section>
         ) : null}
 
         {mainTab === "respaldos" ? (

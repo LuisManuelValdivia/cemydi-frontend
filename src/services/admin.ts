@@ -162,6 +162,27 @@ export type DatabaseBackupSchedule = {
   updatedAt: string;
 };
 
+export type MaintenanceOperation = "VACUUM" | "ANALYZE" | "VACUUM_ANALYZE";
+
+export type MaintenanceRunResult = {
+  operation: MaintenanceOperation;
+  schemaName: string | null;
+  tableName: string | null;
+};
+
+export type MaintenanceSchedule = {
+  enabled: boolean;
+  everyDays: number;
+  runAtTime: string;
+  operation: MaintenanceOperation;
+  schemaName: string | null;
+  tableName: string | null;
+  lastRunAt: string | null;
+  nextRunAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type ActiveUserSession = {
   sessionId: string;
   userId: number;
@@ -300,6 +321,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (init?.headers && typeof init.headers === "object" && !Array.isArray(init.headers)) {
     Object.assign(headers, init.headers as Record<string, string>);
+  }
+
+  if (typeof document !== "undefined") {
+    const match = document.cookie.match(/(?:^|; )cemydi_access=([^;]+)/);
+    if (match) {
+      headers["Authorization"] = `Bearer ${match[1]}`;
+    }
   }
 
   const res = await fetch(`${API_URL}${path}`, {
@@ -555,8 +583,17 @@ export function deleteReview(id: number) {
 }
 
 export async function downloadDatabaseBackup() {
+  const headers: Record<string, string> = {};
+  if (typeof document !== "undefined") {
+    const match = document.cookie.match(/(?:^|; )cemydi_access=([^;]+)/);
+    if (match) {
+      headers["Authorization"] = `Bearer ${match[1]}`;
+    }
+  }
+
   const response = await fetch(`${API_URL}/backups/database`, {
     method: "GET",
+    headers,
     credentials: "include",
   });
 
@@ -618,8 +655,17 @@ export function deleteDatabaseBackupRecord(id: number) {
 }
 
 export async function downloadDatabaseBackupById(id: number) {
+  const headers: Record<string, string> = {};
+  if (typeof document !== "undefined") {
+    const match = document.cookie.match(/(?:^|; )cemydi_access=([^;]+)/);
+    if (match) {
+      headers["Authorization"] = `Bearer ${match[1]}`;
+    }
+  }
+
   const response = await fetch(`${API_URL}/backups/database/${id}/download`, {
     method: "GET",
+    headers,
     credentials: "include",
   });
 
@@ -699,4 +745,47 @@ export function updateDatabaseBackupSchedule(payload: {
     method: "PUT",
     body: JSON.stringify(payload),
   });
+}
+
+export function runMaintenance(payload: {
+  operation: MaintenanceOperation;
+  schemaName?: string | null;
+  tableName?: string | null;
+}) {
+  return request<MaintenanceRunResult>("/maintenance/run", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getMaintenanceSchedule() {
+  return request<{ schedule: MaintenanceSchedule }>("/maintenance/schedule", {
+    method: "GET",
+  });
+}
+
+export function updateMaintenanceSchedule(payload: {
+  enabled: boolean;
+  everyDays: number;
+  runAtTime: string;
+  operation: MaintenanceOperation;
+  schemaName?: string | null;
+  tableName?: string | null;
+}) {
+  return request<{ schedule: MaintenanceSchedule; message: string }>(
+    "/maintenance/schedule",
+    {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+export function deleteMaintenanceSchedule() {
+  return request<{ schedule: MaintenanceSchedule; message: string }>(
+    "/maintenance/schedule",
+    {
+      method: "DELETE",
+    }
+  );
 }
